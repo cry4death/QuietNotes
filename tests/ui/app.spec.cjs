@@ -468,11 +468,19 @@ async function chooseContextAction(label) {
   }, label);
 }
 
-test('избранное переживает перезапуск, переименование и перенос заметки', async () => {
+test('звёздочка в каждом виде списка, в предпросмотре и после переноса и перезапуска', async () => {
   await launch();
   await chooseContextAction('Закрепить в избранном');
-  await page.locator('.file-row.note').click({ button: 'right' });
+  const row = page.locator('.file-row.note');
+  await expect(row.locator('.favorite-badge')).toBeHidden();
+  await row.click({ button: 'right' });
   await expect(page.locator('#favorite-list button')).toHaveText('Ветки');
+  for (const mode of ['list', 'tiles', 'icons']) {
+    await page.locator('#view-mode').selectOption(mode);
+    await expect(row.locator('.favorite-badge')).toBeVisible();
+    await expect(row).toHaveAttribute('aria-description', 'В избранном');
+  }
+  await page.locator('#view-mode').selectOption('list');
   await page.locator('#rename').click();
   await page.locator('#action-input').fill('Команды Git');
   await page.locator('#action-input').press('Enter');
@@ -484,9 +492,16 @@ test('избранное переживает перезапуск, переим
   const favorite = page.locator('#favorite-list button');
   await favorite.click();
   await expect(page.locator('#markdown h1')).toHaveText('Ветки Git');
+  await page.locator('#library-root').click();
+  await page.locator('.file-row.folder[data-path="SSH"]').click();
+  const preview = page.locator('#folder-preview-list');
+  const pinned = preview.getByRole('button', { name: 'Команды Git.md', exact: true });
+  await expect(pinned.locator('.favorite-badge')).toBeVisible();
+  await expect(preview.getByRole('button', { name: 'Подключение.md', exact: true }).locator('.favorite-badge')).toBeHidden();
   await chooseContextAction('Убрать из избранного');
-  await favorite.click({ button: 'right' });
+  await pinned.click({ button: 'right' });
   await expect(page.locator('#favorites')).not.toBeVisible();
+  await expect(pinned.locator('.favorite-badge')).toBeHidden();
 });
 
 test('Ctrl+F находит фразу через границу форматирования и переключает совпадения', async () => {

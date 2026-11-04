@@ -4,6 +4,7 @@
   --code: #15191f; --code-bar: #1e242d; --border: #303641; --text: #e7eaf0;
   --muted: #a0a9b9; --faint: #838e9f; --accent: #9bbdff; --accent-bg: #29394f;
   --accent-text: #15243d; --danger: #ffaaaa; --scrim: #080b11b3;
+  --favorite: #ffc866;
   --shadow: 0 20px 80px #0005;
   font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif;
   font-size: 14px; font-weight: 400; line-height: 1.5;
@@ -15,6 +16,7 @@
   --code: #f0f3f7; --code-bar: #e9edf3; --border: #d7dee8; --text: #222b3b;
   --muted: #606b7e; --faint: #667287; --accent: #315eb3; --accent-bg: #e0e9f9;
   --accent-text: #fff; --danger: #aa313c; --scrim: #19233670;
+  --favorite: #935804;
   --shadow: 0 20px 80px #182a4526;
 }
 * { box-sizing: border-box; }
@@ -98,7 +100,7 @@ kbd { font: 11px 'Segoe UI', sans-serif; color: var(--faint); border: 1px solid 
 .folder-preview ul { list-style: none; padding: 0; margin: 0; }
 .folder-preview li + li { border-top: 1px solid var(--border); }
 .folder-preview li button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 7px 8px; border-radius: 5px; text-align: left; overflow-wrap: anywhere; }
-.folder-preview li svg, #folder-preview-empty { color: var(--muted); }
+.folder-preview li button > svg, #folder-preview-empty { color: var(--muted); }
 .note-meta { color: var(--faint); font-size: 11px; display: flex; align-items: center; gap: 9px; margin-bottom: 17px; }
 .meta-dot { opacity: .65; }
 .markdown { font-size: 16px; line-height: 1.85; overflow-wrap: anywhere; }
@@ -285,6 +287,10 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 .file-row.selected { background: var(--accent-bg); }
 .file-row.selected > svg { color: var(--accent); }
 .file-row-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.file-row-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.favorite-badge { display: none; flex: none; align-items: center; justify-content: center; color: var(--favorite); }
+[data-favorite] .favorite-badge { display: inline-flex; }
+.favorite-badge svg { width: 15px; height: 15px; fill: currentColor; }
 .file-row-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row-detail { font-size: 10px; color: var(--faint); }
 .file-extension { margin-left: auto; font: 10px Consolas, monospace; color: var(--faint); flex-shrink: 0; }
@@ -342,6 +348,15 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 .view-icons .file-row { flex-direction: column; justify-content: flex-start; gap: 13px; padding: 15px 8px 13px; min-height: 156px; text-align: center; border: 1px solid transparent; }
 .view-icons .file-row.selected { border-color: var(--accent); }
 .view-icons .file-row-info { width: 100%; }
+.view-icons .file-row-label { justify-content: center; }
+.view-tiles .file-row[data-favorite], .view-icons .file-row[data-favorite] { position: relative; }
+.view-tiles .file-row[data-favorite] { padding-right: 34px; }
+.view-tiles .favorite-badge, .view-icons .favorite-badge {
+  position: absolute; top: 7px; right: 7px; width: 23px; height: 23px;
+  background: color-mix(in srgb, var(--favorite) 16%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--favorite) 28%, var(--border));
+  border-radius: 50%;
+}
 .view-icons .file-row-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.45; font-size: 13px; }
 .view-icons .file-row-detail { display: none; }
 .folder-art { width: 104px; height: 86px; position: relative; filter: drop-shadow(0 3px 2px #00000012); }

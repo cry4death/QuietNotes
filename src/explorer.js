@@ -93,8 +93,9 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
       const artwork = node.type === 'folder'
         ? `<span class="item-art folder-art ${flatten(node.children).some(item => item.type === 'note') ? 'has-paper' : ''}" aria-hidden="true"><span class="folder-back"></span><span class="folder-paper"></span><span class="folder-front"></span></span>`
         : '<span class="item-art document-art" aria-hidden="true"><span class="document-fold"></span><span class="document-lines"></span><span class="document-label">md</span></span>';
+      const badge = node.type === 'note' ? `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>` : '';
       row.innerHTML = icon(node.type === 'folder' ? 'folder' : 'file') + artwork
-        + `<span class="file-row-info"><span class="file-row-name">${escape(node.name)}</span><span class="file-row-detail">${detail}</span></span><span class="file-extension">${node.type === 'folder' ? 'Папка' : '.md'}</span>`;
+        + `<span class="file-row-info"><span class="file-row-label"><span class="file-row-name">${escape(node.name)}</span>${badge}</span><span class="file-row-detail">${detail}</span></span><span class="file-extension">${node.type === 'folder' ? 'Папка' : '.md'}</span>`;
       row.onclick = run(() => node.type === 'folder' ? selectFolder(node) : navigateToNote(node.path));
       row.oncontextmenu = run(event => contextMenu(event, node.path));
       if (node.type === 'folder') {

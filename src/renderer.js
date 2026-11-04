@@ -164,6 +164,17 @@ function drawTree() {
   panels.render();
   renderFavorites();
   if (!$('folder-preview').hidden) renderFolderPreview();
+  updateFavoriteBadges();
+}
+
+function updateFavoriteBadges() {
+  const pinned = new Set(favorites);
+  for (const button of document.querySelectorAll('.file-row.note, #folder-preview-list button[data-path]')) {
+    const isFavorite = pinned.has(button.dataset.path);
+    button.toggleAttribute('data-favorite', isFavorite);
+    if (isFavorite) button.setAttribute('aria-description', 'В избранном');
+    else button.removeAttribute('aria-description');
+  }
 }
 
 function renderFavorites() {
@@ -191,6 +202,7 @@ async function toggleFavorite(relative) {
   await api.preferences({ favorites: next });
   favorites = next;
   renderFavorites();
+  updateFavoriteBadges();
   toast(pinned ? 'Заметка убрана из избранного' : 'Заметка закреплена');
 }
 
@@ -291,6 +303,11 @@ function renderFolderPreview() {
     const name = document.createElement('span');
     name.textContent = basename(entry.path);
     button.append(name);
+    if (entry.type === 'note') {
+      button.dataset.path = entry.path;
+      button.insertAdjacentHTML('beforeend', `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>`);
+      button.oncontextmenu = run(event => contextMenu(event, entry.path));
+    }
     button.onclick = run(() => entry.type === 'folder' ? navigateFolder(entry.path) : navigateToNote(entry.path));
     item.append(button);
     list.append(item);
