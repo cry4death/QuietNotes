@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('notes', {
   rename: (relative, name) => invoke('rename', relative, name), delete: relative => invoke('delete', relative),
   move: (relative, destination) => invoke('move', relative, destination),
   importFiles: destination => invoke('import-files', destination),
+  contextMenu: request => invoke('context-menu', request),
   reveal: relative => invoke('reveal', relative), copy: text => invoke('copy', text),
   preferences: patch => invoke('preferences', patch), dirty: value => invoke('dirty', value),
   close: () => invoke('close'), fullscreen: () => invoke('fullscreen'),

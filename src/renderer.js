@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { createExplorer } from './explorer.js';
+import { createPanels } from './panels.js';
 
 const $ = id => document.getElementById(id);
 const api = window.notes;
@@ -24,11 +25,13 @@ const icons = {
   up: '<path d="M12 20V4m-6 6 6-6 6 6"/>',
   move: '<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M7 13h10m-3-3 3 3-3 3"/>',
   import: '<path d="M12 3v12m-4-4 4 4 4-4M4 15v6h16v-6"/>',
-  panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/>'
+  panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16m8-16v16"/>'
 };
 const icon = name => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.file}</svg>`;
 document.querySelectorAll('[data-icon]').forEach(element => { element.innerHTML = icon(element.dataset.icon); });
-const state = { root: null, folder: '', viewMode: 'list', preview: true, tree: [], expanded: new Set(), selected: null, note: null, editing: false, dirty: false, external: false, saving: false, navigating: false, theme: 'dark' };
+const state = { root: null, folder: '', viewMode: 'list', preview: true, sidebar: true, browser: true, sidebarWidth: 235, browserWidth: null, tree: [], expanded: new Set(), selected: null, note: null, editing: false, dirty: false, external: false, saving: false, navigating: false, theme: 'dark' };
 let toastTimer, searchTimer, searchGeneration = 0, searchResults = [], activeResult = 0, refreshing = false, refreshAgain = false, closePending = false;
 const basename = value => value.split('/').at(-1);
 const parent = value => value.includes('/') ? value.slice(0, value.lastIndexOf('/')) : '';
@@ -126,7 +129,7 @@ async function confirmUnsaved() {
   return choice === 'discard';
 }
 
-function drawTree() { explorer.render(); }
+function drawTree() { explorer.render(); panels.render(); }
 
 function updateToolbar() {
   $('select-root').setAttribute('aria-current', String(Boolean(state.root) && !state.selected));
@@ -161,6 +164,7 @@ function showWelcome() {
 
 function showFolder(node) {
   state.folder = node?.path || '';
+  state.browser = true;
   showWelcome();
 }
 
@@ -172,7 +176,7 @@ async function navigateFolder(relative) {
     const node = relative ? nodes().find(item => item.type === 'folder' && item.path === relative) : null;
     if (relative && !node) throw new Error('Папка больше не существует.');
     showFolder(node);
-    await api.preferences({ folder: state.folder, lastNote: '' });
+    await api.preferences({ folder: state.folder, lastNote: '', browser: state.browser });
   } finally { state.navigating = false; }
 }
 
@@ -296,13 +300,13 @@ async function chooseRoot() {
   } finally { state.navigating = false; }
 }
 
-async function createItem(type) {
+async function createItem(type, destination) {
   if (state.navigating || state.saving) return;
   if (!state.root) await chooseRoot();
   if (!state.root) return;
   state.navigating = true;
   try {
-    const folder = activeParent();
+    const folder = destination ?? activeParent();
     if (!(await confirmUnsaved())) return;
     const name = await ask({ title: type === 'folder' ? 'Новая папка' : 'Новая заметка', description: `В папке: ${folder || basename(state.root.replace(/\\/g, '/'))}`, value: '', buttons: [{ label: 'Отмена', value: null }, { label: 'Создать', value: 'submit', kind: 'primary' }] });
     if (!name) return;
@@ -312,6 +316,7 @@ async function createItem(type) {
     if (type === 'note') { await openNote(relative, true); startEditing(); }
     else { state.expanded.add(relative); showFolder(nodes().find(node => node.path === relative)); }
     drawTree();
+    await api.preferences({ folder: state.folder, browser: state.browser });
   } finally { state.navigating = false; }
 }
 
@@ -365,8 +370,8 @@ async function saveCopy() {
   } finally { state.saving = false; updateToolbar(); if (closePending) run(requestClose)(); }
 }
 
-async function renameItem() {
-  const node = selectedNode();
+async function renameItem(relative = state.selected) {
+  const node = nodes().find(item => item.path === relative);
   if (!node || state.navigating || state.saving) return;
   state.navigating = true;
   try {
@@ -377,7 +382,7 @@ async function renameItem() {
     state.expanded = new Set([...state.expanded].map(item => item === node.path || item.startsWith(node.path + '/') ? next + item.slice(node.path.length) : item));
     state.tree = await api.tree();
     if (node.type === 'note') await openNote(next, true);
-    else showSelectedFolder(nodes().find(item => item.path === next));
+    else { state.folder = parent(next); showSelectedFolder(nodes().find(item => item.path === next)); }
     await api.preferences({ expanded: [...state.expanded] });
     toast('Название изменено');
   } finally { state.navigating = false; }
@@ -401,14 +406,14 @@ async function moveItem(relative = state.selected, destination) {
   } finally { state.navigating = false; }
 }
 
-async function importFiles() {
+async function importFiles(destination = state.folder) {
   if (state.navigating || state.saving) return;
   if (!state.root) await chooseRoot();
   if (!state.root) return;
   state.navigating = true;
   try {
     if (!(await confirmUnsaved())) return;
-    const result = await api.importFiles(state.folder);
+    const result = await api.importFiles(destination);
     if (!result) return;
     state.tree = await api.tree(); drawTree();
     if (result.added.length) await openNote(result.added[0], true);
@@ -417,8 +422,8 @@ async function importFiles() {
   } finally { state.navigating = false; }
 }
 
-async function deleteItem() {
-  const node = selectedNode();
+async function deleteItem(relative = state.selected) {
+  const node = nodes().find(item => item.path === relative);
   if (!node || state.navigating || state.saving) return;
   state.navigating = true;
   try {
@@ -427,6 +432,7 @@ async function deleteItem() {
     if (choice !== 'delete') return;
     await api.delete(node.path);
     state.tree = await api.tree();
+    while (state.folder && !nodes().some(item => item.type === 'folder' && item.path === state.folder)) state.folder = parent(state.folder);
     showWelcome();
     await api.preferences({ lastNote: '' });
     toast('Перемещено в корзину');
@@ -523,16 +529,31 @@ function scheduleSearch() {
   }), 100);
 }
 
-const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem });
+async function contextMenu(event, relative, background = false) {
+  event.preventDefault(); event.stopPropagation();
+  if (state.navigating || state.saving || document.querySelector('dialog[open]')) return;
+  const command = await api.contextMenu({ path: relative, background });
+  if (!command) return;
+  const actions = {
+    'create-note': () => createItem('note', command.directory),
+    'create-folder': () => createItem('folder', command.directory),
+    import: () => importFiles(command.directory),
+    'open-folder': () => navigateFolder(command.path),
+    'open-note': () => navigateToNote(command.path),
+    rename: () => renameItem(command.path),
+    move: () => moveItem(command.path),
+    delete: () => deleteItem(command.path),
+    reveal: () => api.reveal(command.path)
+  };
+  await actions[command.action]?.();
+}
+
+const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu });
+const panels = createPanels({ state, $, api, run });
 $('view-mode').onchange = run(async () => {
   state.viewMode = $('view-mode').value;
   drawTree();
   await api.preferences({ viewMode: state.viewMode });
-});
-$('preview-toggle').onclick = run(async () => {
-  state.preview = !state.preview;
-  drawTree();
-  await api.preferences({ preview: state.preview });
 });
 $('choose-root').onclick = run(chooseRoot);
 $('select-root').onclick = run(() => navigateFolder(''));
@@ -540,9 +561,9 @@ $('folder-up').onclick = run(() => navigateFolder(parent(state.folder)));
 $('welcome-choose').onclick = run(() => selectedNode()?.type === 'folder' ? navigateFolder(state.selected) : state.root ? createItem('note') : chooseRoot());
 $('create-folder').onclick = run(() => createItem('folder'));
 $('create-note').onclick = run(() => createItem('note'));
-$('import-files').onclick = run(importFiles);
+$('import-files').onclick = run(() => importFiles());
 $('move').onclick = run(() => moveItem());
-$('rename').onclick = run(renameItem); $('delete').onclick = run(deleteItem);
+$('rename').onclick = run(() => renameItem()); $('delete').onclick = run(() => deleteItem());
 $('reveal').onclick = run(() => api.reveal(state.selected || ''));
 $('edit').onclick = startEditing; $('save').onclick = run(saveNote);
 $('cancel-edit').onclick = run(async () => { if (state.note && await confirmUnsaved()) await openNote(state.note.path, true); });
@@ -555,7 +576,7 @@ $('save-copy').onclick = run(saveCopy);
 $('theme-toggle').onclick = run(async () => { setTheme(state.theme === 'dark' ? 'light' : 'dark'); await api.preferences({ theme: state.theme }); });
 $('search-open').onclick = openSearch;
 $('search-close').onclick = () => $('search-dialog').close();
-$('search-dialog').addEventListener('close', () => { ++searchGeneration; clearTimeout(searchTimer); $('search-open').focus(); });
+$('search-dialog').addEventListener('close', () => { ++searchGeneration; clearTimeout(searchTimer); (state.sidebar ? $('search-open') : $('sidebar-toggle')).focus(); });
 $('search-dialog').addEventListener('click', event => { if (event.target === $('search-dialog')) { const r = $('search-dialog').getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('search-dialog').close(); } });
 $('search-input').oninput = scheduleSearch;
 $('search-input').onkeydown = event => {
@@ -585,6 +606,11 @@ async function init() {
   setTheme(initial.settings.theme || 'dark');
   state.viewMode = ['list', 'tiles', 'icons'].includes(initial.settings.viewMode) ? initial.settings.viewMode : 'list';
   state.preview = initial.settings.preview !== false;
+  state.sidebar = initial.settings.sidebar !== false;
+  state.browser = initial.settings.browser !== false;
+  if (!state.browser && !state.preview) state.preview = true;
+  state.sidebarWidth = Number.isFinite(initial.settings.sidebarWidth) ? initial.settings.sidebarWidth : 235;
+  state.browserWidth = Number.isFinite(initial.settings.browserWidth) ? initial.settings.browserWidth : null;
   state.root = initial.root;
   state.expanded = new Set(initial.settings.expanded || []);
   updateRoot();

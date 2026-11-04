@@ -1,5 +1,5 @@
 // Список папок, просмотр содержимого и выбор места для переноса.
-export function createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem }) {
+export function createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu }) {
   const allNodes = () => flatten(state.tree);
   const children = relative => relative ? allNodes().find(node => node.path === relative)?.children || [] : state.tree;
   const mime = 'application/x-quiet-notes-path';
@@ -50,10 +50,16 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
       button.classList.toggle('active', state.folder === node.path || state.folder.startsWith(node.path + '/'));
       button.innerHTML = icon('folder') + `<span class="tree-name">${escape(node.name)}</span><span class="folder-count">${flatten(node.children).filter(item => item.type === 'note').length}</span>`;
       button.title = node.path; button.onclick = run(() => navigateFolder(node.path));
+      button.oncontextmenu = run(event => contextMenu(event, node.path));
       dropTarget(button, node.path); library.append(button);
     }
     $('library-root').classList.toggle('active', Boolean(state.root) && !state.folder);
     $('library-root').onclick = run(() => navigateFolder(''));
+    $('library-root').oncontextmenu = run(event => contextMenu(event, '', true));
+    $('browser-panel').oncontextmenu = run(event => {
+      if (event.target.closest('.view-controls')) return;
+      return contextMenu(event, state.folder, true);
+    });
     dropTarget($('library-root'), '');
     $('note-count').textContent = allNodes().filter(node => node.type === 'note').length;
     $('tree-empty').hidden = state.tree.some(node => node.type === 'folder');
@@ -90,6 +96,7 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
       row.innerHTML = icon(node.type === 'folder' ? 'folder' : 'file') + artwork
         + `<span class="file-row-info"><span class="file-row-name">${escape(node.name)}</span><span class="file-row-detail">${detail}</span></span><span class="file-extension">${node.type === 'folder' ? 'Папка' : '.md'}</span>`;
       row.onclick = run(() => node.type === 'folder' ? selectFolder(node) : navigateToNote(node.path));
+      row.oncontextmenu = run(event => contextMenu(event, node.path));
       if (node.type === 'folder') {
         row.ondblclick = run(() => navigateFolder(node.path));
         dropTarget(row, node.path);

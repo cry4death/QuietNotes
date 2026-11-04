@@ -376,3 +376,154 @@ test('перетаскивание и клавиатурная навигаци�
   await expect(page.locator('#markdown h1')).toHaveText('Перенос крупного значка');
   expect(await fs.readFile(path.join(root, 'SSH', 'Начните здесь.md'), 'utf8')).toBe('# Перенос крупного значка');
 });
+
+test('все панели можно скрыть и вернуть без потери черновика', async () => {
+  await launch();
+  await page.locator('.folder-shortcut[data-path="SSH"]').click();
+  await page.locator('.file-row.note').click();
+  const initialWidth = (await page.locator('.workspace').boundingBox()).width;
+  await page.locator('#sidebar-toggle').click();
+  await expect(page.locator('#sidebar')).not.toBeVisible();
+  await expect(page.locator('#sidebar-toggle')).toBeVisible();
+  expect((await page.locator('.workspace').boundingBox()).width).toBeGreaterThan(initialWidth + 180);
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sidebar-toggle')).toBeFocused();
+  await page.locator('#browser-toggle').click();
+  await expect(page.locator('#browser-panel')).not.toBeVisible();
+  await expect(page.locator('#note')).toBeVisible();
+  await page.screenshot({ path: 'test-results/notes-focus.png', animations: 'disabled' });
+  await page.locator('#edit').click();
+  await page.locator('#editor').fill('# Текст при скрытых панелях');
+  await page.locator('#preview-toggle').click();
+  await expect(page.locator('#content-scroll')).not.toBeVisible();
+  await expect(page.locator('#browser-panel')).toBeVisible();
+  await page.locator('#preview-toggle').click();
+  await expect(page.locator('#editor')).toHaveValue('# Текст при скрытых панелях');
+  await page.locator('#sidebar-toggle').click();
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#markdown h1')).toHaveText('Текст при скрытых панелях');
+});
+
+test('изменение ширины мышью и восстановление панелей после перезапуска', async () => {
+  await launch();
+  const drag = async (id, delta) => {
+    const bounds = await page.locator(id).boundingBox();
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 180);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + bounds.width / 2 + delta, bounds.y + 180, { steps: 8 });
+    await page.mouse.up();
+  };
+  const sidebarBefore = (await page.locator('#sidebar').boundingBox()).width;
+  await drag('#sidebar-resizer', 55);
+  expect((await page.locator('#sidebar').boundingBox()).width).toBeGreaterThan(sidebarBefore + 45);
+  const browserBefore = (await page.locator('#browser-panel').boundingBox()).width;
+  await drag('#browser-resizer', 45);
+  expect((await page.locator('#browser-panel').boundingBox()).width).toBeGreaterThan(browserBefore + 35);
+  const sidebarWidth = (await page.locator('#sidebar').boundingBox()).width;
+  const browserWidth = (await page.locator('#browser-panel').boundingBox()).width;
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('#browser-toggle').click();
+  await application.close(); application = null;
+  await launch(false);
+  await expect(page.locator('#sidebar')).not.toBeVisible();
+  await expect(page.locator('#browser-panel')).not.toBeVisible();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('#browser-toggle').click();
+  expect((await page.locator('#sidebar').boundingBox()).width).toBe(sidebarWidth);
+  expect((await page.locator('#browser-panel').boundingBox()).width).toBe(browserWidth);
+  await page.locator('#browser-resizer').focus();
+  await page.keyboard.press('ArrowRight');
+  expect((await page.locator('#browser-panel').boundingBox()).width).toBe(browserWidth + 16);
+  await page.locator('#sidebar-resizer').dblclick();
+  expect((await page.locator('#sidebar').boundingBox()).width).toBe(235);
+});
+
+async function chooseContextAction(label) {
+  await application.evaluate(({ Menu }, choice) => {
+    globalThis.contextChoice = choice;
+    Menu.buildFromTemplate = items => ({ popup(options) {
+      globalThis.contextLabels = items.filter(item => item.label).map(item => item.label);
+      if (globalThis.contextChoice) {
+        const selected = items.find(item => item.label === globalThis.contextChoice);
+        if (!selected) throw new Error('Пункт меню не найден: ' + globalThis.contextChoice);
+        selected.click();
+      }
+      options.callback();
+    } });
+  }, label);
+}
+
+test('контекстное меню пустого места создаёт папку и заметку в текущем месте', async () => {
+  await launch();
+  await page.locator('#library-root').click();
+  await chooseContextAction('Новая папка');
+  await page.locator('#file-list').click({ button: 'right', position: { x: 160, y: 220 } });
+  await expect(page.locator('#action-title')).toHaveText('Новая папка');
+  expect(await application.evaluate(() => globalThis.contextLabels)).not.toContain('Удалить…');
+  await page.locator('#action-input').fill('Из контекстного меню');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.locator('#browser-title')).toHaveText('Из контекстного меню');
+  await chooseContextAction('Новая заметка');
+  await page.locator('#folder-empty').click({ button: 'right' });
+  await page.locator('#action-input').fill('Созданная заметка');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.locator('#editor')).toBeVisible();
+  expect(await fs.readFile(path.join(root, 'Из контекстного меню', 'Созданная заметка.md'), 'utf8')).toContain('# Созданная заметка');
+});
+
+test('контекстное меню папки использует именно нажатую папку', async () => {
+  await launch();
+  await page.locator('#library-root').click();
+  await chooseContextAction('Новая заметка');
+  await page.locator('.file-row.folder[data-path="SSH"]').click({ button: 'right' });
+  await expect(page.locator('#action-description')).toContainText('SSH');
+  await page.locator('#action-input').fill('Внутри SSH');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.locator('#editor')).toBeVisible();
+  await page.keyboard.press('Control+s');
+  expect(await fs.readFile(path.join(root, 'SSH', 'Внутри SSH.md'), 'utf8')).toContain('# Внутри SSH');
+  await chooseContextAction('Переименовать…');
+  await page.locator('.folder-shortcut[data-path="Git"]').click({ button: 'right' });
+  await expect(page.locator('#action-input')).toHaveValue('Git');
+  await page.locator('#action-input').fill('Git новое имя');
+  await page.getByRole('button', { name: 'Переименовать', exact: true }).last().click();
+  expect(await fs.readFile(path.join(root, 'Git новое имя', 'Ветки.md'), 'utf8')).toContain('# Ветки Git');
+  await expect(page.locator('#welcome-title')).toHaveText('Git новое имя');
+});
+
+test('отмена контекстного меню не меняет несохранённый текст', async () => {
+  await launch();
+  await page.locator('#edit').click();
+  await page.locator('#editor').fill('# Черновик до правого клика');
+  await chooseContextAction(null);
+  await page.locator('.folder-shortcut[data-path="SSH"]').click({ button: 'right' });
+  await expect(page.locator('#editor')).toHaveValue('# Черновик до правого клика');
+  await expect(page.locator('#action-dialog')).not.toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#markdown h1')).toHaveText('Черновик до правого клика');
+});
+
+test('настоящее меню Electron открывается и передаёт правильный файл в подтверждение', async () => {
+  await launch();
+  await page.locator('#library-root').click();
+  await application.evaluate(({ Menu }) => {
+    const build = Menu.buildFromTemplate.bind(Menu);
+    Menu.buildFromTemplate = items => {
+      globalThis.nativeContextMenu = build(items);
+      globalThis.nativeContextMenu.once('menu-will-show', () => { globalThis.nativeMenuShown = true; });
+      return globalThis.nativeContextMenu;
+    };
+  });
+  await page.locator('.file-row.folder[data-path="SSH"]').click({ button: 'right' });
+  await expect.poll(() => application.evaluate(() => globalThis.nativeMenuShown)).toBe(true);
+  expect(await application.evaluate(() => globalThis.nativeContextMenu.items.map(item => item.label))).toContain('Новая заметка');
+  await application.evaluate(() => {
+    globalThis.nativeContextMenu.items.find(item => item.label === 'Удалить…').click();
+    globalThis.nativeContextMenu.closePopup();
+  });
+  await expect(page.locator('#action-title')).toHaveText('Удалить «SSH»?');
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
+  expect((await fs.stat(path.join(root, 'SSH'))).isDirectory()).toBe(true);
+});

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, session, shell, clipboard, screen, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol, session, shell, clipboard, screen, nativeTheme, Menu } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { NoteStore } = require('./store.cjs');
@@ -119,6 +119,24 @@ function installHandlers() {
     } else shell.showItemInFolder(full);
   });
   handle('copy', text => { if (typeof text !== 'string') throw new Error('Нечего копировать.'); clipboard.writeText(text); });
+  handle('context-menu', async request => {
+    if (typeof request?.path !== 'string') throw new Error('Недопустимый путь.');
+    const full = await getStore().resolve(request.path);
+    const folder = (await fs.stat(full)).isDirectory();
+    if (!folder && !/\.md$/i.test(request.path)) throw new Error('Нужен Markdown-файл.');
+    const directory = folder ? request.path : path.posix.dirname(request.path) === '.' ? '' : path.posix.dirname(request.path);
+    return new Promise(resolve => {
+      let done = false;
+      const finish = value => { if (!done) { done = true; resolve(value); } };
+      const item = (label, action) => ({ label, click: () => finish({ action, path: request.path, directory }) });
+      const items = [];
+      if (!request.background) items.push(item(folder ? 'Открыть папку' : 'Открыть заметку', folder ? 'open-folder' : 'open-note'), { type: 'separator' });
+      items.push(item('Новая заметка', 'create-note'), item('Новая папка', 'create-folder'), item('Добавить файл…', 'import'));
+      if (!request.background && request.path) items.push({ type: 'separator' }, item('Переименовать…', 'rename'), item('Переместить…', 'move'), item('Удалить…', 'delete'));
+      items.push({ type: 'separator' }, item('Показать в проводнике', 'reveal'));
+      Menu.buildFromTemplate(items).popup({ window, callback: () => finish(null) });
+    });
+  });
   handle('preferences', patch => {
     if (['dark', 'light'].includes(patch?.theme)) {
       settings.theme = patch.theme;
@@ -128,6 +146,10 @@ function installHandlers() {
     if (typeof patch?.folder === 'string') settings.folder = patch.folder;
     if (['list', 'tiles', 'icons'].includes(patch?.viewMode)) settings.viewMode = patch.viewMode;
     if (typeof patch?.preview === 'boolean') settings.preview = patch.preview;
+    if (typeof patch?.sidebar === 'boolean') settings.sidebar = patch.sidebar;
+    if (typeof patch?.browser === 'boolean') settings.browser = patch.browser;
+    if (Number.isFinite(patch?.sidebarWidth) && patch.sidebarWidth >= 190 && patch.sidebarWidth <= 360) settings.sidebarWidth = patch.sidebarWidth;
+    if (patch?.browserWidth === null || Number.isFinite(patch?.browserWidth) && patch.browserWidth >= 200 && patch.browserWidth <= 4000) settings.browserWidth = patch.browserWidth;
     if (Array.isArray(patch?.expanded)) settings.expanded = patch.expanded.filter(item => typeof item === 'string');
     return persist();
   });
