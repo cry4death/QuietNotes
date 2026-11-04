@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { createExplorer } from './explorer.js';
 import { createPanels } from './panels.js';
+import { createNoteEditor } from './editor.js';
 
 const $ = id => document.getElementById(id);
 const api = window.notes;
@@ -41,6 +42,11 @@ const nodes = () => flatten(state.tree);
 const selectedNode = () => nodes().find(node => node.path === state.selected);
 const activeParent = () => state.folder;
 const run = action => async (...args) => { try { return await action(...args); } catch (error) { toast(error.message, true); } };
+marked.use({ renderer: {
+  checkbox({ checked }) {
+    return `<span class="task-check" role="img" aria-label="${checked ? 'Выполнено' : 'Не выполнено'}">${checked ? '☑' : '☐'}</span> `;
+  }
+} });
 
 function toast(message, error = false) {
   clearTimeout(toastTimer);
@@ -58,13 +64,14 @@ function setDirty(value) {
 }
 
 function updateStatus(message) {
-  $('status-text').textContent = message || (state.dirty ? 'Есть несохранённые изменения' : state.editing ? 'Редактирование · Markdown' : state.note ? '.md · Сохранено на диске' : state.root ? `${nodes().filter(node => node.type === 'note').length} заметок · На диске` : 'Выберите папку, чтобы начать');
+  $('status-text').textContent = message || (state.dirty ? 'Есть несохранённые изменения' : state.editing ? 'Редактирование заметки' : state.note ? '.md · Сохранено на диске' : state.root ? `${nodes().filter(node => node.type === 'note').length} заметок · На диске` : 'Выберите папку, чтобы начать');
   $('status-text').classList.toggle('unsaved', state.dirty);
 }
 
 function setTheme(theme) {
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
+  noteEditor.setTheme(theme);
   const title = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
   $('theme-toggle').innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
   $('theme-toggle').title = title;
@@ -140,7 +147,7 @@ function updateToolbar() {
   $('cancel-edit').hidden = !state.editing;
   $('edit-divider').hidden = !state.note;
   $('save').disabled = state.saving;
-  $('editor').readOnly = state.saving;
+  noteEditor.setReadOnly(state.saving);
   for (const id of ['create-folder', 'create-note', 'import-files']) $(id).disabled = state.saving;
 }
 
@@ -326,9 +333,9 @@ function startEditing() {
   state.preview = true;
   drawTree();
   api.preferences({ preview: true }).catch(error => toast(error.message, true));
-  $('editor').value = state.note.content;
   $('note').hidden = true; $('editor-panel').hidden = false;
-  updateToolbar(); updateStatus(); $('editor').focus();
+  noteEditor.load(state.note.content);
+  updateToolbar(); updateStatus(); noteEditor.focus();
 }
 
 async function saveNote() {
@@ -336,7 +343,7 @@ async function saveNote() {
   if (state.external) { toast('Файл изменён снаружи. Загрузите его с диска или сохраните свою версию отдельной копией.', true); return false; }
   state.saving = true; updateToolbar();
   try {
-    const result = await api.save(state.note.path, $('editor').value, state.note.version);
+    const result = await api.save(state.note.path, noteEditor.value(), state.note.version);
     if (result.conflict) { showConflict(); return false; }
     state.note = result; state.editing = false; state.external = false;
     setDirty(false); renderMarkdown();
@@ -362,7 +369,7 @@ async function saveCopy() {
   try {
     const relative = await api.create(parent(state.note.path), name, 'note');
     const original = await api.read(relative);
-    const saved = await api.save(relative, $('editor').value, original.version);
+    const saved = await api.save(relative, noteEditor.value(), original.version);
     if (saved.conflict) throw new Error('Файл копии тоже изменился. Выберите другое название.');
     state.tree = await api.tree();
     await openNote(relative, true);
@@ -462,7 +469,7 @@ async function refreshFiles() {
         if (state.dirty) showConflict();
         else {
           state.note = current; renderMarkdown();
-          if (state.editing) $('editor').value = current.content;
+          if (state.editing) noteEditor.load(current.content);
           updateStatus('Подхвачены изменения с диска');
         }
       }
@@ -550,6 +557,9 @@ async function contextMenu(event, relative, background = false) {
 
 const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu });
 const panels = createPanels({ state, $, api, run });
+const noteEditor = createNoteEditor({ $, getPath: () => state.note?.path || '', getTheme: () => state.theme, toast,
+  onChange: content => { if (state.editing && !state.saving) setDirty(content !== state.note.content); }
+});
 $('view-mode').onchange = run(async () => {
   state.viewMode = $('view-mode').value;
   drawTree();
@@ -567,7 +577,6 @@ $('rename').onclick = run(() => renameItem()); $('delete').onclick = run(() => d
 $('reveal').onclick = run(() => api.reveal(state.selected || ''));
 $('edit').onclick = startEditing; $('save').onclick = run(saveNote);
 $('cancel-edit').onclick = run(async () => { if (state.note && await confirmUnsaved()) await openNote(state.note.path, true); });
-$('editor').oninput = () => setDirty($('editor').value !== state.note.content);
 $('load-external').onclick = run(async () => {
   const choice = await ask({ title: 'Загрузить версию с диска?', description: 'Несохранённый текст в редакторе будет заменён. Чтобы оставить его, сначала сохраните копию.', buttons: [{ label: 'Отмена', value: null }, { label: 'Загрузить с диска', value: 'load', kind: 'primary' }] });
   if (choice === 'load') await openNote(state.note.path, true);

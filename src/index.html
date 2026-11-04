@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' notes://media data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' notes://media data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Заметки</title>
   <link rel="stylesheet" href="styles.css">
   <script src="renderer.js" defer></script>
@@ -39,7 +39,12 @@
           <span class="empty-hint" id="welcome-hint">Подойдёт любая папка с файлами .md</span>
         </section>
         <article id="note" class="note-document" hidden><div class="note-meta"><span id="note-topic"></span><span class="meta-dot">·</span><span id="note-date"></span></div><div id="markdown" class="markdown"></div><div class="note-end"><span></span>Конец заметки<span></span></div></article>
-        <section id="editor-panel" class="editor-panel" hidden><label for="editor" class="editor-label">Markdown <span>Обычный текст, без лишнего</span></label><textarea id="editor" aria-label="Текст заметки в Markdown" spellcheck="false"></textarea></section>
+        <section id="editor-panel" class="editor-panel" aria-label="Редактор заметки" hidden>
+          <header class="editor-heading"><div class="editor-modes" role="group" aria-label="Режим редактора"><button id="editor-visual" aria-pressed="true">Текст</button><button id="editor-source" aria-pressed="false">Markdown</button></div><div id="editor-history" class="editor-history"><button id="editor-undo" class="icon-button" aria-label="Отменить действие" title="Отменить · Ctrl+Z">↶</button><button id="editor-redo" class="icon-button" aria-label="Повторить действие" title="Повторить · Ctrl+Y">↷</button></div></header>
+          <div id="visual-editor"></div>
+          <textarea id="editor" aria-label="Текст заметки в Markdown" spellcheck="false" hidden></textarea>
+          <footer class="editor-footer"><span id="editor-hint">Выделите текст и выберите оформление</span><span>Ctrl+S — сохранить</span></footer>
+        </section>
       </div>
       </div>
       <footer class="statusbar"><span id="status-text">Выберите папку, чтобы начать</span><span class="status-shortcuts"><span><kbd>Ctrl K</kbd> поиск</span><span><kbd>F11</kbd> весь экран</span></span></footer>

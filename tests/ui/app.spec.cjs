@@ -11,11 +11,16 @@ async function launch(withRoot = true) {
   if (withRoot) env.QUIET_NOTES_TEST_ROOT = root;
   application = await electron.launch({ args: ['.'], cwd: path.resolve(__dirname, '../..'), env });
   page = await application.firstWindow();
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.waitForLoadState('domcontentloaded');
   await expect(page.locator('body')).toHaveAttribute('aria-busy', 'false');
   await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true);
 }
+async function fillMarkdown(text) {
+  await page.locator('#editor-source').click();
+  await page.locator('#editor').fill(text);
+}
+
 test.beforeEach(async () => {
   errors.length = 0;
   temp = await fs.mkdtemp(path.join(os.tmpdir(), 'quiet-notes-ui-'));
@@ -26,7 +31,10 @@ test.beforeEach(async () => {
   await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# Ветки Git\n\nУникальный текст для поиска: черника\n\n```sh\ngit switch -c feature/notes\n```\n');
 });
 test.afterEach(async () => {
-  if (application) await application.close();
+  if (application) {
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(window => window.removeAllListeners('close')));
+    await application.close();
+  }
   application = null;
   await fs.rm(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
   expect(errors).toEqual([]);
@@ -54,14 +62,14 @@ test('папки, просмотр, точное копирование и по�
 test('редактирование, Ctrl+S, внешние изменения и конфликт', async () => {
   await launch();
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('# Мой текст\n\nИзменение из приложения.');
+  await fillMarkdown('# Мой текст\n\nИзменение из приложения.');
   await page.keyboard.press('Control+s');
   await expect(page.locator('#markdown h1')).toHaveText('Мой текст');
   expect(await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8')).toContain('Изменение из приложения');
   await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# Снаружи\n\nВнешняя версия.');
   await expect(page.locator('#markdown h1')).toHaveText('Снаружи');
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('# Моя несохранённая версия');
+  await fillMarkdown('# Моя несохранённая версия');
   await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# Внешняя вторая версия');
   await expect(page.locator('#conflict-banner')).toBeVisible();
   await page.keyboard.press('Control+s');
@@ -84,8 +92,8 @@ test('создать, переименовать, отменить и подтв
   await page.locator('#create-note').click();
   await page.locator('#action-input').fill('Проверка');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.locator('#editor')).toBeVisible();
-  await page.locator('#editor').fill('# Проверка\n\nТекст');
+  await expect(page.locator('#editor-panel')).toBeVisible();
+  await fillMarkdown('# Проверка\n\nТекст');
   await page.keyboard.press('Control+s');
   await page.locator('#rename').click();
   await page.locator('#action-input').fill('Новое имя');
@@ -107,7 +115,7 @@ test('защита несохранённого текста и тема пос�
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect.poll(() => application.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors)).toBe(false);
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('Не потерять этот текст');
+  await fillMarkdown('Не потерять этот текст');
   await page.locator('.folder-shortcut', { hasText: 'SSH' }).click();
   await expect(page.locator('#action-title')).toHaveText('Сохранить изменения?');
   await page.getByRole('button', { name: 'Отмена', exact: true }).last().click();
@@ -170,7 +178,7 @@ test('скриншоты, маленькое окно, полный экран �
 test('закрытие с несохранённым текстом: отмена, сохранение, выход', async () => {
   await launch();
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('# Сохранить перед выходом');
+  await fillMarkdown('# Сохранить перед выходом');
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
   await expect(page.locator('#action-title')).toHaveText('Сохранить изменения?');
   await page.getByRole('button', { name: 'Отмена', exact: true }).last().click();
@@ -193,8 +201,8 @@ test('создание в корне и горячие клавиши при р�
   await page.locator('#create-note').click();
   await page.locator('#action-input').fill('Корневая заметка');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.locator('#editor')).toBeVisible();
-  await page.locator('#editor').fill('# Текст из корня');
+  await expect(page.locator('#editor-panel')).toBeVisible();
+  await fillMarkdown('# Текст из корня');
   await page.locator('#editor').dispatchEvent('keydown', { key: 'ы', code: 'KeyS', ctrlKey: true });
   await expect(page.locator('#markdown h1')).toHaveText('Текст из корня');
   expect(await fs.readFile(path.join(root, 'Корневая заметка.md'), 'utf8')).toBe('# Текст из корня');
@@ -297,8 +305,8 @@ test('создание на первом запуске: отмена выбор
   await expect(page.locator('#action-title')).toHaveText('Новая заметка');
   await page.locator('#action-input').fill('Новая с первого запуска');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.locator('#editor')).toBeVisible();
-  await page.locator('#editor').fill('# Создано с первого запуска');
+  await expect(page.locator('#editor-panel')).toBeVisible();
+  await fillMarkdown('# Создано с первого запуска');
   await page.keyboard.press('Control+s');
   await expect(page.locator('#markdown h1')).toHaveText('Создано с первого запуска');
   expect(await fs.readFile(path.join(root, 'Новая с первого запуска.md'), 'utf8')).toBe('# Создано с первого запуска');
@@ -347,8 +355,8 @@ test('вид и область просмотра запоминаются, см
   await expect(page.locator('#content-scroll')).not.toBeVisible();
   await expect(page.locator('#preview-toggle')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#edit').click();
-  await expect(page.locator('#editor')).toBeVisible();
-  await page.locator('#editor').fill('# Черновик при смене вида');
+  await expect(page.locator('#editor-panel')).toBeVisible();
+  await fillMarkdown('# Черновик при смене вида');
   for (const mode of ['icons', 'list', 'tiles']) {
     await page.locator('#view-mode').selectOption(mode);
     await expect(page.locator('#editor')).toHaveValue('# Черновик при смене вида');
@@ -394,7 +402,7 @@ test('все панели можно скрыть и вернуть без по�
   await expect(page.locator('#note')).toBeVisible();
   await page.screenshot({ path: 'test-results/notes-focus.png', animations: 'disabled' });
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('# Текст при скрытых панелях');
+  await fillMarkdown('# Текст при скрытых панелях');
   await page.locator('#preview-toggle').click();
   await expect(page.locator('#content-scroll')).not.toBeVisible();
   await expect(page.locator('#browser-panel')).toBeVisible();
@@ -469,7 +477,7 @@ test('контекстное меню пустого места создаёт �
   await page.locator('#folder-empty').click({ button: 'right' });
   await page.locator('#action-input').fill('Созданная заметка');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.locator('#editor')).toBeVisible();
+  await expect(page.locator('#editor-panel')).toBeVisible();
   expect(await fs.readFile(path.join(root, 'Из контекстного меню', 'Созданная заметка.md'), 'utf8')).toContain('# Созданная заметка');
 });
 
@@ -481,7 +489,7 @@ test('контекстное меню папки использует именн
   await expect(page.locator('#action-description')).toContainText('SSH');
   await page.locator('#action-input').fill('Внутри SSH');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.locator('#editor')).toBeVisible();
+  await expect(page.locator('#editor-panel')).toBeVisible();
   await page.keyboard.press('Control+s');
   expect(await fs.readFile(path.join(root, 'SSH', 'Внутри SSH.md'), 'utf8')).toContain('# Внутри SSH');
   await chooseContextAction('Переименовать…');
@@ -496,7 +504,7 @@ test('контекстное меню папки использует именн
 test('отмена контекстного меню не меняет несохранённый текст', async () => {
   await launch();
   await page.locator('#edit').click();
-  await page.locator('#editor').fill('# Черновик до правого клика');
+  await fillMarkdown('# Черновик до правого клика');
   await chooseContextAction(null);
   await page.locator('.folder-shortcut[data-path="SSH"]').click({ button: 'right' });
   await expect(page.locator('#editor')).toHaveValue('# Черновик до правого клика');
@@ -526,4 +534,151 @@ test('настоящее меню Electron открывается и перед�
   await expect(page.locator('#action-title')).toHaveText('Удалить «SSH»?');
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   expect((await fs.stat(path.join(root, 'SSH'))).isDirectory()).toBe(true);
+});
+
+const richText = () => page.getByRole('textbox', { name: 'Текст заметки', exact: true });
+async function tool(name) {
+  const button = page.locator('#visual-editor button.' + name);
+  if (!await button.isVisible()) await page.locator('#visual-editor button.more').click();
+  await button.click();
+}
+
+test('визуальный редактор: оформление кнопками, отмена, повтор и сохранение Markdown', async () => {
+  await launch();
+  await page.locator('#edit').click();
+  await expect(richText()).toBeVisible();
+  await expect(page.locator('#editor')).not.toBeVisible();
+  await richText().fill('Новая инструкция');
+  await tool('heading');
+  await page.locator('#visual-editor li[data-level="2"]').click();
+  await expect(richText().locator('h2')).toHaveText('Новая инструкция');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.insertText('Важный текст');
+  await page.keyboard.press('Shift+Home');
+  await tool('bold');
+  await expect(richText().locator('strong')).toHaveText('Важный текст');
+  await page.locator('#editor-undo').click();
+  await expect(richText().locator('strong')).toHaveCount(0);
+  await page.locator('#editor-redo').click();
+  await expect(richText().locator('strong')).toHaveText('Важный текст');
+  await tool('italic');
+  await expect(richText().locator('em')).toHaveText('Важный текст');
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#markdown h2')).toHaveText('Новая инструкция');
+  await expect(page.locator('#markdown strong em, #markdown em strong')).toHaveText('Важный текст');
+  const saved = await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8');
+  expect(saved).toContain('## Новая инструкция');
+  expect(saved).toContain('Важный текст');
+  expect(saved).not.toContain('<h2>');
+});
+
+test('визуальный редактор: списки, задачи, ссылки и блок команд', async () => {
+  await launch();
+  await page.locator('#browser-toggle').click();
+  await page.locator('#edit').click();
+  await richText().fill('Проверить сервер');
+  await tool('task-list');
+  await expect(richText().locator('li.task-list-item')).toBeVisible();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  await tool('link');
+  await page.locator('#toastuiLinkUrlInput').fill('https://example.com/docs');
+  await page.locator('#toastuiLinkTextInput').fill('Документация');
+  await page.locator('.toastui-editor-popup:visible .toastui-editor-ok-button').click();
+  await expect(richText().locator('a')).toHaveText('Документация');
+  await page.keyboard.press('End'); await page.keyboard.press('Enter');
+  await tool('codeblock');
+  await page.keyboard.insertText('ssh user@server\nprintf "a  b"');
+  await expect(richText().locator('pre code')).toHaveText('ssh user@server\nprintf "a  b"');
+  await page.screenshot({ path: 'test-results/notes-editor-dark.png', animations: 'disabled' });
+  await page.locator('#theme-toggle').click();
+  await expect(page.locator('#visual-editor .toastui-editor-defaultUI')).not.toHaveClass(/toastui-editor-dark/);
+  await page.screenshot({ path: 'test-results/notes-editor-light.png', animations: 'disabled' });
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#markdown a')).toHaveText('Документация');
+  await expect(page.locator('#markdown .task-check')).toHaveAttribute('aria-label', 'Не выполнено');
+  expect(await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8')).toMatch(/[-*] \[ \] Проверить сервер/);
+  await page.getByRole('button', { name: 'Копировать код', exact: true }).click();
+  expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe('ssh user@server\nprintf "a  b"');
+});
+
+test('режимы редактора: исходник без потерь, возврат к исходному тексту и новый черновик', async () => {
+  const original = '\uFEFF# Заголовок\r\n\r\n-   текст\r\n\r\n```sh\r\necho "a  b"\r\n```\r\n';
+  await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), original);
+  await launch();
+  await page.locator('#edit').click();
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#editor-source').click();
+    // HTML textarea нормализует CRLF; файл при сохранении без правок остаётся прежним.
+    await expect(page.locator('#editor')).toHaveValue(original.replaceAll('\r\n', '\n'));
+    await page.locator('#editor-visual').click();
+  }
+  await expect(page.locator('#status-text')).not.toHaveClass(/unsaved/);
+  await page.keyboard.press('Control+s');
+  expect(await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8')).toBe(original);
+  await page.locator('#edit').click();
+  await richText().fill('Визуальная правка');
+  await fillMarkdown('Исходник после правки');
+  await page.locator('#editor-visual').click();
+  await expect(richText()).toHaveText('Исходник после правки');
+  await fillMarkdown(original);
+  await page.locator('#editor-visual').click();
+  await expect(richText().locator('h1')).toHaveText('Заголовок');
+  await page.locator('#cancel-edit').click();
+  if (await page.locator('#action-dialog').isVisible()) await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(page.locator('#note')).toBeVisible();
+});
+
+test('визуальная правка сохраняет таблицу, вложенный список, язык кода и локальную картинку', async () => {
+  const markdown = '# Инструкция\n\n| Что | Где |\n| --- | --- |\n| Ключ | SSH |\n\n- Первая\n  - Вложенная\n\n```powershell\nWrite-Host "a  b"\n  echo ok\n```\n\n![Схема](./image.svg)\n\nКонец\n';
+  await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), markdown);
+  await fs.writeFile(path.join(root, 'Git', 'image.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="steelblue"/></svg>');
+  await launch(); await page.locator('#edit').click();
+  await expect(richText().locator('table')).toBeVisible();
+  const image = richText().locator('img[alt="Схема"]');
+  await expect.poll(() => image.evaluate(el => el.naturalWidth)).toBe(80);
+  await richText().locator('p').last().click();
+  await page.keyboard.press('End'); await page.keyboard.insertText(' инструкции');
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#markdown table td').first()).toHaveText('Ключ');
+  await expect(page.locator('#markdown ul ul li')).toHaveText('Вложенная');
+  await expect(page.locator('#markdown code.language-powershell')).toHaveText('Write-Host "a  b"\n  echo ok\n');
+  const saved = await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8');
+  expect(saved).toContain('![Схема](./image.svg)');
+  expect(saved).toContain('Конец инструкции');
+  expect(saved).not.toContain('notes://');
+});
+
+test('визуальный черновик защищён при внешних правках и сохранении копии', async () => {
+  await launch(); await page.locator('#edit').click();
+  await richText().fill('Мой визуальный черновик');
+  await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# С диска');
+  await expect(page.locator('#conflict-banner')).toBeVisible();
+  await expect(richText()).toHaveText('Мой визуальный черновик');
+  await page.locator('#load-external').click();
+  await page.locator('#action-dialog').getByRole('button', { name: 'Отмена', exact: true }).click();
+  await expect(richText()).toHaveText('Мой визуальный черновик');
+  await page.locator('#save-copy').click();
+  await page.locator('#action-input').fill('Визуальная копия');
+  await page.getByRole('button', { name: 'Сохранить копию', exact: true }).last().click();
+  await expect(page.locator('#markdown')).toContainText('Мой визуальный черновик');
+  expect(await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8')).toBe('# С диска');
+  expect(await fs.readFile(path.join(root, 'Git', 'Визуальная копия.md'), 'utf8')).toContain('Мой визуальный черновик');
+});
+
+test('инструменты редактора доступны в узком окне', async () => {
+  await launch();
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(820, 600));
+  await page.locator('#edit').click();
+  await richText().fill('Оформление в узком окне');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#visual-editor button.more')).toBeVisible();
+  await tool('table');
+  await expect(page.locator('#visual-editor .toastui-editor-popup:visible')).toBeVisible();
+  await page.locator('#visual-editor .toastui-editor-table-selection').click({ position: { x: 25, y: 25 }, timeout: 5000 });
+  await expect(richText().locator('table')).toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#editor-panel')).not.toBeVisible();
 });

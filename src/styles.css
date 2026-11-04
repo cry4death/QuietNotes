@@ -100,6 +100,8 @@ kbd { font: 11px 'Segoe UI', sans-serif; color: var(--faint); border: 1px solid 
 .markdown ul, .markdown ol { padding-left: 24px; margin: 15px 0 22px; }
 .markdown li { margin: 6px 0; padding-left: 3px; }
 .markdown li::marker { color: var(--faint); }
+.markdown li:has(> .task-check, > p > .task-check) { list-style: none; }
+.markdown .task-check { color: var(--accent); }
 .markdown a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .markdown blockquote { margin: 24px 0; border-left: 2px solid var(--accent); padding: 2px 20px; color: var(--muted); background: var(--sidebar); border-radius: 0 6px 6px 0; }
 .markdown blockquote p { margin: 10px 0; }
@@ -139,10 +141,57 @@ code, pre, textarea { font-family: 'Cascadia Code', 'Cascadia Mono', Consolas, m
 .empty-state h1 { font-size: 27px; line-height: 1.35; font-weight: 600; letter-spacing: -.6px; margin: 0 0 14px; max-width: 100%; overflow-wrap: anywhere; }
 .empty-state p { color: var(--muted); font-size: 14px; line-height: 1.9; margin: 0 0 28px; }
 .empty-hint { color: var(--faint); font-size: 11px; margin-top: 14px; }
-.editor-panel { height: 100%; padding: 27px 36px; display: flex; flex-direction: column; }
-.editor-label { display: flex; justify-content: space-between; color: var(--accent); font-size: 12px; padding-bottom: 17px; }
-.editor-label span { color: var(--faint); font-size: 11px; }
-#editor { flex: 1; resize: none; width: 100%; min-height: 250px; outline: none; background: transparent; border: 0; color: var(--text); font-size: 14px; line-height: 1.9; tab-size: 2; padding: 0 10px 20px 0; }
+.editor-panel { height: 100%; min-height: 0; padding: 0; display: flex; flex-direction: column; }
+.editor-heading { display: flex; align-items: center; gap: 12px; min-height: 53px; padding: 9px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.editor-modes { display: flex; gap: 3px; padding: 3px; background: var(--sidebar); border: 1px solid var(--border); border-radius: 7px; }
+.editor-modes button { padding: 4px 10px; border-radius: 4px; color: var(--muted); font-size: 12px; }
+.editor-modes button[aria-pressed='true'] { background: var(--accent-bg); color: var(--accent); }
+.editor-history { display: flex; margin-left: auto; gap: 2px; }
+.editor-history button { font-size: 23px; }
+.editor-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 16px; padding: 8px 18px; font-size: 11px; color: var(--faint); border-top: 1px solid var(--border); flex-shrink: 0; }
+#editor { flex: 1; resize: none; width: 100%; min-height: 0; outline: none; background: transparent; border: 0; color: var(--text); font-size: 14px; line-height: 1.9; tab-size: 2; padding: 26px 28px; }
+#visual-editor { flex: 1; min-height: 0; overflow: hidden; }
+#visual-editor .toastui-editor-defaultUI { border: 0; border-radius: 0; font-family: inherit; color: var(--text); }
+#visual-editor .toastui-editor-defaultUI-toolbar { background: var(--sidebar); border-color: var(--border); padding: 0 10px; border-radius: 0; }
+#visual-editor .toastui-editor-toolbar-divider { background: var(--border); margin-left: 4px; margin-right: 4px; }
+#visual-editor .toastui-editor-toolbar-icons { border-color: transparent; border-radius: 5px; }
+#visual-editor .toastui-editor-toolbar-icons:hover { background-color: var(--hover); border-color: transparent; }
+#visual-editor .toastui-editor-toolbar-icons.active { background-color: var(--accent-bg); border-color: var(--accent); }
+#visual-editor .toastui-editor-toolbar-icons.codeblock { background-image: none; }
+#visual-editor .toastui-editor-toolbar-icons.codeblock::before { content: '>_'; font: 15px Consolas, monospace; color: var(--muted); }
+#visual-editor .toastui-editor-toolbar-icons.codeblock.active::before { color: var(--accent); }
+#visual-editor .toastui-editor-ww-container, #visual-editor .toastui-editor-md-container { background: var(--bg); }
+#visual-editor .toastui-editor-contents { color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.8; }
+#visual-editor .toastui-editor-contents.ProseMirror { padding: 26px 28px 60px; max-width: 840px; margin: 0 auto; min-height: 100%; }
+#visual-editor .toastui-editor-contents p { color: var(--text); margin: 12px 0 18px; line-height: 1.8; }
+#visual-editor .toastui-editor-contents h1, #visual-editor .toastui-editor-contents h2, #visual-editor .toastui-editor-contents h3,
+#visual-editor .toastui-editor-contents h4, #visual-editor .toastui-editor-contents h5, #visual-editor .toastui-editor-contents h6 { color: var(--text); border: 0; font-weight: 600; line-height: 1.35; }
+#visual-editor .toastui-editor-contents h1 { font-size: 28px; letter-spacing: -.6px; }
+#visual-editor .toastui-editor-contents h2 { font-size: 21px; }
+#visual-editor .toastui-editor-contents h3 { font-size: 18px; }
+#visual-editor .toastui-editor-contents :is(h1,h2,h3,h4,h5,h6):first-child { margin-top: 0; }
+#visual-editor .toastui-editor-contents :is(ul,ol) { padding-left: 25px; }
+#visual-editor .toastui-editor-contents li::before { color: var(--faint); }
+#visual-editor .toastui-editor-contents blockquote { background: var(--sidebar); border-left: 2px solid var(--accent); padding: 4px 18px; color: var(--muted); }
+#visual-editor .toastui-editor-contents code { font-family: 'Cascadia Code', Consolas, monospace; color: var(--accent); background: var(--code-bar); border-radius: 4px; }
+#visual-editor .toastui-editor-contents pre { background: var(--code); border: 1px solid var(--border); border-radius: 7px; padding: 20px; }
+#visual-editor .toastui-editor-contents pre code { color: var(--text); background: transparent; font-size: 14px; white-space: pre-wrap; }
+#visual-editor .toastui-editor-contents a { color: var(--accent); }
+#visual-editor .toastui-editor-contents :is(th,td) { border-color: var(--border); }
+#visual-editor .toastui-editor-contents th { background: var(--surface); color: var(--text); }
+#visual-editor .toastui-editor-contents hr { border-color: var(--border); }
+#visual-editor .toastui-editor-popup, #visual-editor .toastui-editor-dropdown-toolbar { background: var(--surface); border-color: var(--border); color: var(--text); box-shadow: var(--shadow); max-width: calc(100% - 16px); }
+#visual-editor .toastui-editor-dropdown-toolbar { height: auto; flex-wrap: wrap; }
+#visual-editor .toastui-editor-table-selection-layer { pointer-events: none; }
+#visual-editor .toastui-editor-popup :is(label,input,button), #visual-editor .toastui-editor-popup-add-heading li { color: var(--text); }
+#visual-editor .toastui-editor-popup input { background: var(--bg); border-color: var(--border); }
+#visual-editor .toastui-editor-popup-body .toastui-editor-ok-button { background: var(--accent); color: var(--accent-text); }
+#visual-editor .toastui-editor-popup-body .toastui-editor-close-button { background: var(--hover); color: var(--muted); }
+#visual-editor .toastui-editor-popup-add-heading li:hover { background: var(--hover); }
+#visual-editor .toastui-editor-tooltip { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+#visual-editor .toastui-editor-tooltip .text { color: var(--text); }
+#visual-editor .toastui-editor-tooltip .arrow { background: var(--surface); border-color: var(--border); }
+#visual-editor .ProseMirror:focus-visible { outline: none; }
 .conflict-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 25px; background: var(--accent-bg); color: var(--text); border-bottom: 1px solid var(--border); font-size: 12px; }
 .conflict-banner > span { flex: 1 1 250px; }
 .conflict-banner .button { background: var(--bg); font-size: 11px; }
@@ -293,8 +342,8 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 .view-tiles .document-art { width: 43px; height: 55px; margin: 0 5px; }
 .view-tiles .document-label { font-size: 14px; }
 .view-tiles .document-lines { background-size: 100% 6px; }
-.editor-panel { padding: 26px; }
-.editor-label span { display: none; }
+.editor-heading { padding-left: 12px; padding-right: 12px; }
+#visual-editor .toastui-editor-contents.ProseMirror { padding: 22px 20px 48px; }
 @media (max-width: 1100px) {
   .app-shell { grid-template-columns: 200px minmax(0, 1fr); }
   .workspace-body { grid-template-columns: 235px minmax(0, 1fr); }
