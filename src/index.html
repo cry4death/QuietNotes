@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' notes://media data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Заметки</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body aria-busy="true">
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Папки и заметки">
+      <header class="brand"><span class="brand-mark" data-icon="notebook"></span><span>Заметки</span></header>
+      <button class="search-trigger" id="search-open"><span data-icon="search"></span><span>Найти заметку</span><kbd>Ctrl K</kbd></button>
+      <div class="create-actions"><button class="button primary" id="create-note"><span data-icon="file-plus"></span>Новая заметка</button><div class="create-secondary"><button class="button" id="create-folder"><span data-icon="folder-plus"></span>Новая папка</button><button class="button" id="import-files" title="Скопировать .md-файлы в открытую папку"><span data-icon="import"></span>Добавить файл</button></div></div>
+      <div class="tree-heading"><button id="select-root" class="tree-root" title="Открыть корневую папку">Мои заметки</button><span id="note-count" class="count">0</span></div>
+      <button id="library-root" class="folder-shortcut root-shortcut"><span data-icon="folder"></span>Главная папка</button>
+      <nav id="tree" class="tree" aria-label="Папки библиотеки"></nav>
+      <div id="tree-empty" class="tree-empty" hidden>Темы появятся здесь,<br>когда вы создадите папки.</div>
+      <footer class="sidebar-footer">
+        <button class="root-button" id="choose-root" title="Выбрать другую папку"><span data-icon="folder"></span><span id="root-name">Выбрать папку</span><span class="root-arrow" data-icon="chevrons"></span></button>
+        <div class="sidebar-bottom"><span class="local-label"><span class="local-dot"></span>Только на этом компьютере</span><button id="theme-toggle" class="icon-button" title="Светлая тема" aria-label="Светлая тема" data-icon="sun"></button></div>
+      </footer>
+    </aside>
+    <main class="workspace">
+      <header class="toolbar"><button id="folder-up" class="icon-button" title="На папку выше · Alt+↑" aria-label="На папку выше" data-icon="up" disabled></button><div id="breadcrumbs" class="breadcrumbs">Ваша небольшая библиотека</div><div class="toolbar-actions"><button id="move" class="button" title="Переместить выбранный файл или папку" hidden><span data-icon="move"></span>Переместить</button><button id="reveal" class="icon-button" title="Показать в проводнике" aria-label="Показать в проводнике" data-icon="folder" hidden></button><button id="rename" class="icon-button" title="Переименовать выбранный файл или папку" aria-label="Переименовать" data-icon="pencil" hidden></button><button id="delete" class="icon-button" title="Удалить выбранный файл или папку" aria-label="Удалить" data-icon="trash" hidden></button><span class="toolbar-divider" id="edit-divider" hidden></span><button id="cancel-edit" class="button subtle" hidden>Отмена</button><button id="edit" class="button" hidden><span data-icon="edit"></span>Редактировать</button><button id="save" class="button primary" hidden><span data-icon="check"></span>Сохранить <kbd>Ctrl S</kbd></button></div></header>
+      <div id="conflict-banner" class="conflict-banner" role="status" hidden><span>Файл изменён снаружи. Ваш текст сохранён в редакторе.</span><button class="button" id="load-external">Загрузить с диска</button><button class="button" id="save-copy">Сохранить копию</button></div>
+      <div class="workspace-body">
+      <section id="browser-panel" class="browser-panel" aria-label="Содержимое текущей папки" hidden><header class="browser-heading"><h2 id="browser-title">Мои заметки</h2><span id="folder-count" class="count"></span></header><div class="view-controls"><label for="view-mode">Вид</label><select id="view-mode" aria-label="Вид папок и файлов"><option value="list">Список</option><option value="tiles">Плитки</option><option value="icons">Крупные значки</option></select><button id="preview-toggle" class="icon-button" aria-label="Область просмотра" aria-pressed="true" title="Скрыть область просмотра" data-icon="panel"></button></div><div class="file-list-heading"><span>Имя</span><span>Тип</span></div><div id="file-list" class="file-list" aria-label="Файлы и папки"></div><div id="folder-empty" class="folder-empty-state" hidden>В папке пока пусто.<br>Создайте заметку или добавьте .md-файл.</div><footer class="browser-hint">Клик — просмотр · Двойной клик — открыть папку</footer></section>
+      <div class="content-scroll" id="content-scroll">
+        <section id="welcome" class="empty-state">
+          <div class="empty-symbol" data-icon="notebook"></div>
+          <h1 id="welcome-title">Всё нужное — под рукой.</h1>
+          <p id="welcome-description">Заметки, команды и инструкции.<br>В обычной папке на вашем компьютере.</p>
+          <button id="welcome-choose" class="button primary large"><span data-icon="folder"></span>Выбрать папку с заметками</button>
+          <span class="empty-hint" id="welcome-hint">Подойдёт любая папка с файлами .md</span>
+        </section>
+        <article id="note" class="note-document" hidden><div class="note-meta"><span id="note-topic"></span><span class="meta-dot">·</span><span id="note-date"></span></div><div id="markdown" class="markdown"></div><div class="note-end"><span></span>Конец заметки<span></span></div></article>
+        <section id="editor-panel" class="editor-panel" hidden><label for="editor" class="editor-label">Markdown <span>Обычный текст, без лишнего</span></label><textarea id="editor" aria-label="Текст заметки в Markdown" spellcheck="false"></textarea></section>
+      </div>
+      </div>
+      <footer class="statusbar"><span id="status-text">Выберите папку, чтобы начать</span><span class="status-shortcuts"><span><kbd>Ctrl K</kbd> поиск</span><span><kbd>F11</kbd> весь экран</span></span></footer>
+    </main>
+  </div>
+  <dialog id="search-dialog" class="search-dialog" aria-label="Поиск по всем заметкам"><div class="search-field"><span data-icon="search"></span><input id="search-input" aria-label="Поиск по названиям и тексту" placeholder="Название или текст заметки…" autocomplete="off"><button id="search-close" class="key-button" aria-label="Закрыть поиск">Esc</button></div><div class="search-caption" id="search-caption">Поиск по названиям и содержимому всех заметок</div><div id="search-results" class="search-results" role="listbox" aria-label="Результаты поиска"></div><footer class="search-footer"><span>↑ ↓ выбрать <span class="search-footer-gap">↵ открыть</span></span><span>Все папки · .md</span></footer></dialog>
+  <dialog id="action-dialog" class="action-dialog" aria-labelledby="action-title"><form id="action-form"><h2 id="action-title"></h2><p id="action-description"></p><label id="action-label" for="action-input">Название</label><input id="action-input" autocomplete="off" maxlength="180"><p id="action-error" class="form-error" role="alert"></p><div id="action-buttons" class="dialog-buttons"></div></form></dialog>
+  <dialog id="move-dialog" class="move-dialog" aria-labelledby="move-title"><header><h2 id="move-title">Переместить</h2><p id="move-description"></p></header><div class="move-location"><button id="move-up" class="icon-button" aria-label="На папку выше в выборе назначения" data-icon="up"></button><div id="move-breadcrumbs" class="breadcrumbs"></div></div><div id="move-folders" class="move-folders"></div><p id="move-error" class="form-error" role="alert"></p><footer class="dialog-buttons"><button id="move-cancel" class="button">Отмена</button><button id="move-confirm" class="button primary">Переместить сюда</button></footer></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

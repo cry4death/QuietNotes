@@ -1,0 +1,64 @@
+{
+  "name": "quiet-notes",
+  "productName": "Quiet Notes",
+  "version": "1.2.0",
+  "description": "Локальные Markdown-заметки для Windows",
+  "author": "Quiet Notes",
+  "license": "MIT",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "start": "npm run build && electron .",
+    "test": "node --test tests/store.test.cjs",
+    "test:ui": "npm run build && playwright test",
+    "dist": "npm run build && electron-builder --win portable nsis --x64",
+    "dist:portable": "npm run build && electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "chokidar": "6.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "dompurify": "3.4.17",
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "highlight.js": "11.12.0",
+    "marked": "18.1.3"
+  },
+  "build": {
+    "appId": "local.quietnotes.desktop",
+    "productName": "Quiet Notes",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/main.cjs",
+      "src/preload.cjs",
+      "src/store.cjs",
+      "dist/**/*",
+      "assets/icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "signAndEditExecutable": true
+    },
+    "portable": { "artifactName": "QuietNotes-${version}-${arch}-portable.${ext}" },
+    "nsis": {
+      "artifactName": "QuietNotes-${version}-${arch}-nsis.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Заметки",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
