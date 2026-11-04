@@ -70,9 +70,7 @@ kbd { font: 11px 'Segoe UI', sans-serif; color: var(--faint); border: 1px solid 
 #root-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .root-arrow { margin-left: auto; display: flex; }
 .root-arrow svg { width: 13px; height: 13px; }
-.sidebar-bottom { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
-.local-label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--faint); }
-.local-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: .8; }
+.sidebar-bottom { display: flex; align-items: center; justify-content: flex-end; }
 .workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .toolbar { min-height: 65px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 12px 27px; gap: 12px; }
 .breadcrumbs { display: flex; gap: 10px; align-items: center; color: var(--faint); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
@@ -144,9 +142,6 @@ code, pre, textarea { font-family: 'Cascadia Code', 'Cascadia Mono', Consolas, m
 [data-theme='light'] .hljs-title, [data-theme='light'] .hljs-type { color: #695195; }
 .note-end { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 55px 0 8px; color: var(--faint); font-size: 10px; }
 .note-end span { width: 32px; border-top: 1px solid var(--border); }
-.statusbar { display: flex; justify-content: space-between; gap: 12px; min-height: 33px; border-top: 1px solid var(--border); padding: 8px 26px; color: var(--faint); font-size: 10px; }
-.status-shortcuts { display: flex; gap: 20px; flex-shrink: 0; }
-.statusbar kbd { border: 0; padding: 0; font-size: 10px; margin-right: 4px; }
 .unsaved { color: var(--accent); }
 .empty-state { display: flex; min-height: 100%; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 55px 30px 85px; }
 .empty-symbol { display: flex; width: 64px; height: 64px; justify-content: center; align-items: center; border: 1px solid var(--border); border-radius: 16px; color: var(--accent); margin-bottom: 25px; }
@@ -248,8 +243,6 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
   .toolbar { padding: 12px 16px; }
   .toolbar-actions { gap: 2px; }
   .toolbar-divider { margin: 0 4px; }
-  .local-label { font-size: 9px; }
-  .status-shortcuts { gap: 10px; }
   .button kbd { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
@@ -298,10 +291,8 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 .file-row:hover { cursor: pointer; }
 .file-row.dragging { opacity: .4; }
 .drop-target { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-bg) !important; border-radius: 6px; }
-.browser-hint { padding: 13px 18px; border-top: 1px solid var(--border); color: var(--faint); font-size: 10px; line-height: 1.7; }
 .folder-empty-state { padding: 25px 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .browser-panel:has(#folder-empty:not([hidden])) .file-list { flex: 0; padding-bottom: 0; }
-.browser-panel:has(#folder-empty:not([hidden])) .browser-hint { margin-top: auto; }
 .toolbar { padding: 12px 20px; gap: 9px; }
 .breadcrumbs { gap: 4px; }
 .breadcrumb-button { padding: 5px 6px; border-radius: 4px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
@@ -386,7 +377,6 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
   .toolbar-actions .icon-button { width: 28px; }
   #move { padding: 7px 9px; font-size: 11px; }
   #move > svg { display: none; }
-  .local-label { max-width: 135px; white-space: normal; line-height: 1.5; }
   .search-trigger { font-size: 12px; gap: 6px; }
   .search-trigger kbd { display: none; }
 }

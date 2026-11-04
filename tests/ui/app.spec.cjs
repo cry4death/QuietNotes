@@ -764,7 +764,7 @@ test('режимы редактора: исходник без потерь, в�
     await expect(page.locator('#editor')).toHaveValue(original.replaceAll('\r\n', '\n'));
     await page.locator('#editor-visual').click();
   }
-  await expect(page.locator('#status-text')).not.toHaveClass(/unsaved/);
+  expect(await page.title()).not.toMatch(/^•/);
   await page.keyboard.press('Control+s');
   expect(await fs.readFile(path.join(root, 'Git', 'Ветки.md'), 'utf8')).toBe(original);
   await page.locator('#edit').click();

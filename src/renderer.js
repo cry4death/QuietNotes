@@ -64,12 +64,6 @@ function setDirty(value) {
   state.dirty = value;
   document.title = `${value ? '• ' : ''}${state.note ? basename(state.note.path).replace(/\.md$/i, '') + ' — ' : ''}Заметки`;
   api.dirty(value).catch(error => toast(error.message, true));
-  updateStatus();
-}
-
-function updateStatus(message) {
-  $('status-text').textContent = message || (state.dirty ? 'Есть несохранённые изменения' : state.editing ? 'Редактирование заметки' : state.note ? '.md · Сохранено на диске' : state.root ? `${nodes().filter(node => node.type === 'note').length} заметок · На диске` : 'Выберите папку, чтобы начать');
-  $('status-text').classList.toggle('unsaved', state.dirty);
 }
 
 function setTheme(theme) {
@@ -474,7 +468,7 @@ function startEditing() {
   api.preferences({ preview: true }).catch(error => toast(error.message, true));
   $('note').hidden = true; $('editor-panel').hidden = false;
   noteEditor.load(state.note.content);
-  updateToolbar(); updateStatus(); noteEditor.focus();
+  updateToolbar(); noteEditor.focus();
 }
 
 async function saveNote() {
@@ -599,7 +593,7 @@ async function refreshFiles() {
   try {
     state.tree = await api.tree();
     while (state.folder && !nodes().some(item => item.type === 'folder' && item.path === state.folder)) state.folder = parent(state.folder);
-    drawTree(); updateStatus();
+    drawTree();
     if (state.note) {
       const relative = state.note.path;
       let current;
@@ -615,7 +609,6 @@ async function refreshFiles() {
         else {
           state.note = current; renderMarkdown();
           if (state.editing) noteEditor.load(current.content);
-          updateStatus('Подхвачены изменения с диска');
         }
       }
     } else if (state.selected && !selectedNode()) showWelcome();
