@@ -85,12 +85,12 @@ test('редактирование, Ctrl+S, внешние изменения и
 
 test('создать, переименовать, отменить и подтвердить удаление', async () => {
   await launch();
-  await page.locator('#create-folder').click();
+  await sidebarCommand('Новая папка');
   await page.locator('#action-input').fill('Хостинг');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   // Новая папка создаётся рядом с выбранной заметкой.
   await expect(page.locator('#browser-title')).toHaveText('Хостинг');
-  await page.locator('#create-note').click();
+  await sidebarCommand('Новая заметка');
   await page.locator('#action-input').fill('Проверка');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.locator('#editor-panel')).toBeVisible();
@@ -133,7 +133,7 @@ test('защита несохранённого текста и тема пос�
 test('первый запуск, блокировка активного HTML и сетевых запросов', async () => {
   await launch(false);
   await expect(page.getByRole('button', { name: 'Выбрать папку с заметками' })).toBeVisible();
-  await expect(page.locator('#create-note')).toBeEnabled();
+  await expect(page.locator('#sidebar')).toBeVisible();
   await application.close(); application = null;
   await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# Безопасность\n\n<script>window.compromised = true</script><img src="https://example.com/track.png" onerror="window.compromised = true"><iframe src="https://example.com"></iframe>\n\n```html\n<script>alert(1)</script>\n```');
   await launch();
@@ -194,12 +194,12 @@ test('закрытие с несохранённым текстом: отмен�
 test('создание в корне и горячие клавиши при русской раскладке', async () => {
   await launch();
   await page.locator('#select-root').click();
-  await page.locator('#create-folder').click();
+  await sidebarCommand('Новая папка');
   await page.locator('#action-input').fill('Хостинг');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   expect((await fs.stat(path.join(root, 'Хостинг'))).isDirectory()).toBe(true);
   await page.locator('#select-root').click();
-  await page.locator('#create-note').click();
+  await sidebarCommand('Новая заметка');
   await page.locator('#action-input').fill('Корневая заметка');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.locator('#editor-panel')).toBeVisible();
@@ -290,12 +290,12 @@ test('импорт .md через кнопку: файл копируется, �
   const source = path.join(temp, 'Импорт.md');
   await fs.writeFile(source, '# Из внешнего файла\n\nТекст');
   await application.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); }, source);
-  await page.locator('#import-files').click();
+  await sidebarCommand('Добавить файл…');
   await expect(page.locator('#markdown h1')).toHaveText('Из внешнего файла');
   expect(await fs.readFile(path.join(root, 'Импорт.md'), 'utf8')).toBe('# Из внешнего файла\n\nТекст');
   expect(await fs.readFile(source, 'utf8')).toContain('Текст');
   await fs.writeFile(source, '# Новое содержимое');
-  await page.locator('#import-files').click();
+  await sidebarCommand('Добавить файл…');
   await expect(page.locator('#toast')).toContainText('Уже есть файл');
   expect(await fs.readFile(path.join(root, 'Импорт.md'), 'utf8')).toBe('# Из внешнего файла\n\nТекст');
 });
@@ -303,10 +303,10 @@ test('импорт .md через кнопку: файл копируется, �
 test('создание на первом запуске: отмена выбора папки не блокирует следующие кнопки', async () => {
   await launch(false);
   await application.evaluate(({ dialog }) => { dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] }); });
-  await page.locator('#create-folder').click();
+  await sidebarCommand('Новая папка');
   await expect(page.locator('#action-dialog')).not.toBeVisible();
   await application.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, root);
-  await page.locator('#create-note').click();
+  await sidebarCommand('Новая заметка');
   await expect(page.locator('#action-title')).toHaveText('Новая заметка');
   await page.locator('#action-input').fill('Новая с первого запуска');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
@@ -453,6 +453,11 @@ test('изменение ширины мышью и восстановление
   expect((await page.locator('#sidebar').boundingBox()).width).toBe(235);
 });
 
+async function sidebarCommand(label) {
+  await chooseContextAction(label);
+  await page.locator('.brand').click({button:'right'});
+}
+
 async function chooseContextAction(label) {
   await application.evaluate(({ Menu }, choice) => {
     globalThis.contextChoice = choice;
@@ -486,8 +491,8 @@ test('закреплённые папки и заметки идут первы�
   await application.close(); application = null;
   await launch(false);
   await expect(page.locator('.file-row').first()).toHaveAttribute('data-path','SSH');
-  expect((await page.locator('.create-actions').boundingBox()).height).toBeLessThanOrEqual(34);
-  await expect(page.getByRole('button',{name:'Новая заметка',exact:true})).toHaveAttribute('title','Новая заметка');
+  await expect(page.locator('.create-actions')).toHaveCount(0);
+
 });
 
 test('звёздочка в каждом виде списка, в предпросмотре и после переноса и перезапуска', async () => {
@@ -622,7 +627,7 @@ test('пустой буфер и отмена создания сохраняю�
   await page.locator('#edit').click();
   await fillMarkdown('# Текущий черновик');
   await setClipboardText('  \n');
-  const create = page.locator('#create-from-clipboard');
+  const create = { click: () => sidebarCommand('Новая заметка из буфера…') };
   await create.click();
   await expect(page.locator('#toast')).toContainText('Скопируйте текст');
   await expect(page.locator('#action-dialog')).not.toBeVisible();

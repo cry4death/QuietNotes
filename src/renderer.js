@@ -222,7 +222,6 @@ function updateToolbar() {
   $('edit-divider').hidden = !state.note;
   $('save').disabled = state.saving;
   noteEditor.setReadOnly(state.saving);
-  for (const id of ['create-folder', 'create-note', 'import-files', 'create-from-clipboard']) $(id).disabled = state.saving;
 }
 
 function updateRoot() {
@@ -679,6 +678,8 @@ function scheduleSearch() {
 async function contextMenu(event, relative, background = false) {
   event.preventDefault(); event.stopPropagation();
   if (state.navigating || state.saving || document.querySelector('dialog[open]')) return;
+  if (!state.root) await chooseRoot();
+  if (!state.root) return;
   const command = await api.contextMenu({ path: relative, background });
   if (!command) return;
   const actions = {
@@ -713,10 +714,7 @@ $('select-root').onclick = run(() => navigateFolder(''));
 $('folder-up').onclick = run(() => navigateFolder(parent(state.folder)));
 $('welcome-choose').onclick = run(() => state.root ? createItem('note') : chooseRoot());
 $('folder-preview-open').onclick = run(() => navigateFolder(state.selected));
-$('create-folder').onclick = run(() => createItem('folder'));
-$('create-note').onclick = run(() => createItem('note'));
-$('create-from-clipboard').onclick = run(() => createFromClipboard());
-$('import-files').onclick = run(() => importFiles());
+$('sidebar').oncontextmenu = run(event => contextMenu(event, state.folder, true));
 $('move').onclick = run(() => moveItem());
 $('rename').onclick = run(() => renameItem()); $('delete').onclick = run(() => deleteItem());
 $('reveal').onclick = run(() => api.reveal(state.selected || ''));

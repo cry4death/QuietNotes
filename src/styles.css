@@ -393,6 +393,3 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 .pane-resizer::after { content: ''; position: absolute; inset: 0 -2px; border-radius: 2px; }
 .pane-resizer:hover::after, .pane-resizer:focus-visible::after { background: var(--accent); opacity: .45; }
 .resizing-panels, .resizing-panels * { cursor: col-resize !important; user-select: none !important; }
-
-.create-actions { display: flex; gap: 5px; margin-top: 10px; }
-.create-actions .icon-button { width: 32px; height: 32px; }
