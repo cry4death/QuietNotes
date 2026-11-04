@@ -8,6 +8,12 @@ const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' })
 const hash = text => createHash('sha256').update(text).digest('hex');
 const toRelative = value => value.split(path.sep).join('/');
 
+function validateNoteContent(content) {
+  if (typeof content !== 'string' || Buffer.byteLength(content) > MAX_NOTE_BYTES) {
+    throw new Error('Максимальный размер заметки — 10 МБ.');
+  }
+}
+
 function validName(value, note = false) {
   if (typeof value !== 'string') throw new Error('Укажите название.');
   let name = value.trim();
@@ -82,7 +88,7 @@ class NoteStore {
   }
 
   async save(relative, content, version) {
-    if (typeof content !== 'string' || Buffer.byteLength(content) > MAX_NOTE_BYTES) throw new Error('Максимальный размер заметки — 10 МБ.');
+    validateNoteContent(content);
     const full = await this.resolve(relative);
     const original = await this.read(relative);
     if (original.version !== version) return { conflict: true, current: original };
@@ -98,7 +104,7 @@ class NoteStore {
     } finally { await fs.unlink(temporary).catch(() => {}); }
   }
 
-  async create(parent, name, type) {
+  async create(parent, name, type, content) {
     const folder = await this.resolve(parent);
     if (!(await fs.stat(folder)).isDirectory()) throw new Error('Выберите папку для новой заметки.');
     if (!['folder', 'note'].includes(type)) throw new Error('Неизвестный тип файла.');
@@ -106,7 +112,11 @@ class NoteStore {
     const relative = toRelative(path.join(parent, safeName));
     const full = await this.resolve(relative, true);
     if (type === 'folder') await fs.mkdir(full);
-    else await fs.writeFile(full, '# ' + safeName.replace(/\.md$/i, '') + '\n\n', { encoding: 'utf8', flag: 'wx' });
+    else {
+      const text = content === undefined ? '# ' + safeName.replace(/\.md$/i, '') + '\n\n' : content;
+      validateNoteContent(text);
+      await fs.writeFile(full, text, { encoding: 'utf8', flag: 'wx' });
+    }
     this.invalidateSearch();
     return relative;
   }
@@ -214,4 +224,4 @@ class NoteStore {
   }
 }
 
-module.exports = { NoteStore, validName, hash };
+module.exports = { NoteStore, validName, hash, validateNoteContent };

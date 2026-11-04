@@ -1,7 +1,7 @@
 {
   "name": "quiet-notes",
   "productName": "Quiet Notes",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Локальные Markdown-заметки для Windows",
   "author": "Quiet Notes",
   "license": "MIT",
@@ -29,7 +29,9 @@
     "marked": "18.1.3"
   },
   "overrides": {
-    "@toast-ui/editor": { "dompurify": "$dompurify" }
+    "@toast-ui/editor": {
+      "dompurify": "$dompurify"
+    }
   },
   "build": {
     "appId": "local.quietnotes.desktop",

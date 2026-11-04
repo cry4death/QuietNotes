@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, protocol, session, shell, clipboard, screen, nativeTheme, Menu } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { NoteStore } = require('./store.cjs');
+const { NoteStore, validateNoteContent } = require('./store.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'notes', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 app.commandLine.appendSwitch('disable-background-networking');
@@ -97,7 +97,7 @@ function installHandlers() {
   handle('read', relative => serialized(() => getStore().read(relative)));
   handle('search', query => serialized(() => getStore().search(query)));
   handle('save', (relative, content, version) => serialized(() => getStore().save(relative, content, version)));
-  handle('create', (parent, name, type) => serialized(() => getStore().create(parent, name, type)));
+  handle('create', (parent, name, type, content) => serialized(() => getStore().create(parent, name, type, content)));
   handle('rename', (relative, name) => serialized(() => getStore().rename(relative, name)));
   handle('move', (relative, destination) => serialized(() => getStore().move(relative, destination)));
   handle('import-files', destination => serialized(async () => {
@@ -119,6 +119,12 @@ function installHandlers() {
     } else shell.showItemInFolder(full);
   });
   handle('copy', text => { if (typeof text !== 'string') throw new Error('Нечего копировать.'); clipboard.writeText(text); });
+  handle('clipboard-text', () => {
+    const content = clipboard.readText();
+    if (!content.trim()) throw new Error('Скопируйте текст или Markdown, затем повторите.');
+    validateNoteContent(content);
+    return content;
+  });
   handle('context-menu', async request => {
     if (typeof request?.path !== 'string') throw new Error('Недопустимый путь.');
     const full = await getStore().resolve(request.path);
@@ -131,7 +137,8 @@ function installHandlers() {
       const item = (label, action) => ({ label, click: () => finish({ action, path: request.path, directory }) });
       const items = [];
       if (!request.background) items.push(item(folder ? 'Открыть папку' : 'Открыть заметку', folder ? 'open-folder' : 'open-note'), { type: 'separator' });
-      items.push(item('Новая заметка', 'create-note'), item('Новая папка', 'create-folder'), item('Добавить файл…', 'import'));
+      items.push(item('Новая заметка', 'create-note'), item('Новая заметка из буфера…', 'create-from-clipboard'),
+        item('Новая папка', 'create-folder'), item('Добавить файл…', 'import'));
       if (!request.background && request.path) items.push({ type: 'separator' }, item('Переименовать…', 'rename'), item('Переместить…', 'move'), item('Удалить…', 'delete'));
       items.push({ type: 'separator' }, item('Показать в проводнике', 'reveal'));
       Menu.buildFromTemplate(items).popup({ window, callback: () => finish(null) });

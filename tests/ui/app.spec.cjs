@@ -463,6 +463,69 @@ async function chooseContextAction(label) {
   }, label);
 }
 
+async function setClipboardText(text) {
+  await application.evaluate(({ clipboard }, content) => {
+    clipboard.readText = () => content;
+  }, text);
+}
+
+test('заметка из буфера по горячей клавише сохраняет исходный текст и сразу открывает просмотр', async () => {
+  const markdown = '# Команда из чата\r\n\r\n```bash\r\nprintf "a  b"\r\n```\r\n';
+  await launch();
+  await setClipboardText(markdown);
+  await page.locator('#sidebar-toggle').click();
+  await page.keyboard.press('Control+Shift+N');
+  await expect(page.locator('#action-title')).toHaveText('Новая заметка из буфера');
+  await expect(page.locator('#action-description')).toContainText('Git');
+  await expect(page.locator('#action-preview')).toContainText('printf "a  b"');
+  await setClipboardText('Буфер изменился после открытия диалога');
+  await page.locator('#action-input').fill('Из чата');
+  await page.locator('#action-input').press('Enter');
+  await expect(page.locator('#markdown h1')).toHaveText('Команда из чата');
+  await expect(page.locator('#markdown pre code')).toHaveText('printf "a  b"');
+  expect(await fs.readFile(path.join(root, 'Git', 'Из чата.md'), 'utf8')).toBe(markdown);
+});
+
+test('правый клик по папке сохраняет заметку внутри и позволяет исправить совпадающее название', async () => {
+  await launch();
+  const existing = path.join(root, 'SSH', 'Подключение.md');
+  const original = await fs.readFile(existing, 'utf8');
+  await setClipboardText('Новый текст из буфера');
+  await chooseContextAction('Новая заметка из буфера…');
+  await page.locator('.folder-shortcut[data-path="SSH"]').click({ button: 'right' });
+  await expect(page.locator('#action-description')).toContainText('SSH');
+  const input = page.locator('#action-input');
+  await input.fill('Подключение');
+  const save = page.getByRole('button', { name: 'Сохранить заметку', exact: true });
+  await save.click();
+  await expect(page.locator('#action-error')).toContainText('уже существует');
+  await expect(page.locator('#action-preview')).toHaveText('Новый текст из буфера');
+  expect(await fs.readFile(existing, 'utf8')).toBe(original);
+  await input.fill('Ещё команда');
+  await save.click();
+  await expect(page.locator('#browser-title')).toHaveText('SSH');
+  await expect(page.locator('#markdown')).toContainText('Новый текст из буфера');
+  expect(await fs.readFile(path.join(root, 'SSH', 'Ещё команда.md'), 'utf8')).toBe('Новый текст из буфера');
+});
+
+test('пустой буфер и отмена создания сохраняют открытый черновик', async () => {
+  await launch();
+  await page.locator('#edit').click();
+  await fillMarkdown('# Текущий черновик');
+  await setClipboardText('  \n');
+  const create = page.locator('#create-from-clipboard');
+  await create.click();
+  await expect(page.locator('#toast')).toContainText('Скопируйте текст');
+  await expect(page.locator('#action-dialog')).not.toBeVisible();
+  await setClipboardText('Текст из буфера');
+  await create.click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(page.locator('#action-preview')).toHaveText('Текст из буфера');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#editor')).toHaveValue('# Текущий черновик');
+  expect(await fs.readdir(path.join(root, 'Git'))).toEqual(['Ветки.md']);
+});
+
 test('контекстное меню пустого места создаёт папку и заметку в текущем месте', async () => {
   await launch();
   await page.locator('#library-root').click();

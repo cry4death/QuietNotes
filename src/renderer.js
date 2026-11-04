@@ -8,6 +8,7 @@ import { createNoteEditor } from './editor.js';
 const $ = id => document.getElementById(id);
 const api = window.notes;
 const icons = {
+  clipboard: '<path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3M8 12h8m-8 4h8"/><rect x="9" y="2" width="6" height="5" rx="1.5"/>',
   notebook: '<rect x="5" y="3" width="15" height="18" rx="2"/><path d="M9 3v18M3 7h4M3 12h4M3 17h4M13 8h3M13 12h3"/>',
   search: '<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/>',
   folder: '<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -79,7 +80,7 @@ function setTheme(theme) {
 }
 
 // Один диалог используется для названий, удаления и несохранённых правок.
-function ask({ title, description = '', value, buttons }) {
+function ask({ title, description = '', value, preview, submit, buttons }) {
   const dialog = $('action-dialog');
   if (dialog.open) return Promise.resolve(null);
   const previousFocus = document.activeElement;
@@ -90,29 +91,48 @@ function ask({ title, description = '', value, buttons }) {
   $('action-input').value = value || '';
   $('action-error').textContent = '';
   $('action-buttons').replaceChildren();
+  $('action-preview').hidden = preview === undefined;
+  $('action-preview').textContent = preview ?? '';
+  $('action-preview').scrollTop = 0;
   return new Promise(resolve => {
-    let finished = false;
+    let finished = false, submitting = false;
     const finish = result => {
       if (finished) return;
       finished = true;
       dialog.close();
       dialog.removeEventListener('cancel', cancel);
       $('action-form').onsubmit = null;
+      $('action-preview').textContent = '';
       previousFocus?.focus();
       resolve(result);
     };
-    const cancel = event => { event.preventDefault(); finish(null); };
+    const cancel = event => { event.preventDefault(); if (!submitting) finish(null); };
     dialog.addEventListener('cancel', cancel);
     for (const choice of buttons) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button ' + (choice.kind || '');
       button.textContent = choice.label;
-      button.onclick = () => {
+      button.onclick = async () => {
+        if (submitting) return;
         if (choice.value === 'submit') {
-          const name = $('action-input').value.trim();
-          if (!name) { $('action-error').textContent = 'Введите название.'; $('action-input').focus(); return; }
-          finish(name);
+          const input = $('action-input');
+          const name = input.value.trim();
+          if (!name) { $('action-error').textContent = 'Введите название.'; input.focus(); return; }
+          if (!submit) { finish(name); return; }
+          submitting = true;
+          $('action-error').textContent = '';
+          const controls = [input, ...$('action-buttons').children];
+          controls.forEach(control => { control.disabled = true; });
+          try {
+            finish(await submit(name));
+          } catch (error) {
+            $('action-error').textContent = error.message;
+          } finally {
+            submitting = false;
+            controls.forEach(control => { control.disabled = false; });
+            if (!finished) { input.focus(); input.select(); }
+          }
         } else finish(choice.value);
       };
       $('action-buttons').append(button);
@@ -148,7 +168,7 @@ function updateToolbar() {
   $('edit-divider').hidden = !state.note;
   $('save').disabled = state.saving;
   noteEditor.setReadOnly(state.saving);
-  for (const id of ['create-folder', 'create-note', 'import-files']) $(id).disabled = state.saving;
+  for (const id of ['create-folder', 'create-note', 'import-files', 'create-from-clipboard']) $(id).disabled = state.saving;
 }
 
 function updateRoot() {
@@ -324,6 +344,31 @@ async function createItem(type, destination) {
     else { state.expanded.add(relative); showFolder(nodes().find(node => node.path === relative)); }
     drawTree();
     await api.preferences({ folder: state.folder, browser: state.browser });
+  } finally { state.navigating = false; }
+}
+
+async function createFromClipboard(destination) {
+  if (state.navigating || state.saving || document.querySelector('dialog[open]')) return;
+  const content = await api.clipboardText();
+  if (!state.root) await chooseRoot();
+  if (!state.root || state.navigating || state.saving) return;
+  state.navigating = true;
+  try {
+    const folder = destination ?? activeParent();
+    if (!(await confirmUnsaved())) return;
+    const previewLimit = 12000;
+    const relative = await ask({
+      title: 'Новая заметка из буфера',
+      description: `В папке: ${folder || basename(state.root.replace(/\\/g, '/'))}`,
+      value: '',
+      preview: content.length > previewLimit ? content.slice(0, previewLimit) + '\n\n… Остальной текст тоже сохранится' : content,
+      submit: name => api.create(folder, name, 'note', content),
+      buttons: [{ label: 'Отмена', value: null }, { label: 'Сохранить заметку', value: 'submit', kind: 'primary' }]
+    });
+    if (!relative) return;
+    state.tree = await api.tree();
+    await openNote(relative, true);
+    toast('Заметка сохранена');
   } finally { state.navigating = false; }
 }
 
@@ -543,6 +588,7 @@ async function contextMenu(event, relative, background = false) {
   if (!command) return;
   const actions = {
     'create-note': () => createItem('note', command.directory),
+    'create-from-clipboard': () => createFromClipboard(command.directory),
     'create-folder': () => createItem('folder', command.directory),
     import: () => importFiles(command.directory),
     'open-folder': () => navigateFolder(command.path),
@@ -571,6 +617,7 @@ $('folder-up').onclick = run(() => navigateFolder(parent(state.folder)));
 $('welcome-choose').onclick = run(() => selectedNode()?.type === 'folder' ? navigateFolder(state.selected) : state.root ? createItem('note') : chooseRoot());
 $('create-folder').onclick = run(() => createItem('folder'));
 $('create-note').onclick = run(() => createItem('note'));
+$('create-from-clipboard').onclick = run(() => createFromClipboard());
 $('import-files').onclick = run(() => importFiles());
 $('move').onclick = run(() => moveItem());
 $('rename').onclick = run(() => renameItem()); $('delete').onclick = run(() => deleteItem());
@@ -593,6 +640,11 @@ $('search-input').onkeydown = event => {
   if (event.key === 'Enter') { event.preventDefault(); $('search-results').querySelectorAll('.search-result')[activeResult]?.click(); }
 };
 document.addEventListener('keydown', run(async event => {
+  if (event.ctrlKey && event.shiftKey && !event.altKey && event.code === 'KeyN' && !event.isComposing) {
+    event.preventDefault();
+    if (!event.repeat) await createFromClipboard();
+    return;
+  }
   if (event.altKey && event.key === 'ArrowUp') { event.preventDefault(); await navigateFolder(parent(state.folder)); }
   if (event.key === 'F11') { event.preventDefault(); await api.fullscreen(); }
   if ((event.ctrlKey || event.metaKey) && (event.code === 'KeyK' || event.key.toLowerCase() === 'k')) { event.preventDefault(); openSearch(); }
