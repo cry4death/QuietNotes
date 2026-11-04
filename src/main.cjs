@@ -152,10 +152,6 @@ function installHandlers() {
     });
   });
   handle('preferences', patch => {
-    if (['dark', 'light'].includes(patch?.theme)) {
-      settings.theme = patch.theme;
-      nativeTheme.themeSource = patch.theme;
-    }
     if (typeof patch?.lastNote === 'string') settings.lastNote = patch.lastNote;
     if (typeof patch?.folder === 'string') settings.folder = patch.folder;
     if (['list', 'tiles', 'icons'].includes(patch?.viewMode)) settings.viewMode = patch.viewMode;
@@ -193,7 +189,7 @@ async function createWindow() {
     height: Math.max(560, Math.min(saved.height || 790, 2160)),
     ...(visible ? { x: saved.x, y: saved.y } : {}),
     minWidth: 800, minHeight: 560, show: false, title: 'Заметки',
-    backgroundColor: settings.theme === 'light' ? '#fafbfc' : '#1b1e24',
+    backgroundColor: '#fafbfc',
     icon: path.join(__dirname, '../assets/icon.ico'),
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
@@ -233,8 +229,8 @@ async function ready() {
     const parsed = JSON.parse(await fs.readFile(settingsFile, 'utf8'));
     settings = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch { settings = {}; }
-  settings.theme = settings.theme === 'light' ? 'light' : 'dark';
-  nativeTheme.themeSource = settings.theme;
+  settings.theme = 'light';
+  nativeTheme.themeSource = 'light';
   if (process.env.QUIET_NOTES_TEST_ROOT) settings.root = process.env.QUIET_NOTES_TEST_ROOT;
   if (settings.root) {
     try { await setRoot(settings.root); }

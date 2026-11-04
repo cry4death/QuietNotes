@@ -67,7 +67,6 @@ kbd { font: 11px 'Segoe UI', sans-serif; color: var(--faint); border: 1px solid 
 #root-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .root-arrow { margin-left: auto; display: flex; }
 .root-arrow svg { width: 13px; height: 13px; }
-.sidebar-bottom { display: flex; align-items: center; justify-content: flex-end; }
 .workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .toolbar { min-height: 65px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 12px 27px; gap: 12px; }
 .breadcrumbs { display: flex; gap: 10px; align-items: center; color: var(--faint); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }

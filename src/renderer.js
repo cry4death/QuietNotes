@@ -35,7 +35,7 @@ const icons = {
 };
 const icon = name => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.file}</svg>`;
 document.querySelectorAll('[data-icon]').forEach(element => { element.innerHTML = icon(element.dataset.icon); });
-const state = { root: null, folder: '', viewMode: 'list', preview: true, sidebar: true, browser: true, sidebarWidth: 235, browserWidth: null, tree: [], expanded: new Set(), selected: null, note: null, editing: false, dirty: false, external: false, saving: false, navigating: false, theme: 'dark' };
+const state = { root: null, folder: '', viewMode: 'list', preview: true, sidebar: true, browser: true, sidebarWidth: 235, browserWidth: null, tree: [], expanded: new Set(), selected: null, note: null, editing: false, dirty: false, external: false, saving: false, navigating: false, theme: 'light' };
 let favorites = [];
 let toastTimer, searchTimer, searchGeneration = 0, searchResults = [], activeResult = 0, refreshing = false, refreshAgain = false, closePending = false;
 const basename = value => value.split('/').at(-1);
@@ -64,16 +64,6 @@ function setDirty(value) {
   state.dirty = value;
   document.title = `${value ? '• ' : ''}${state.note ? basename(state.note.path).replace(/\.md$/i, '') + ' — ' : ''}Заметки`;
   api.dirty(value).catch(error => toast(error.message, true));
-}
-
-function setTheme(theme) {
-  state.theme = theme;
-  document.documentElement.dataset.theme = theme;
-  noteEditor.setTheme(theme);
-  const title = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-  $('theme-toggle').innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
-  $('theme-toggle').title = title;
-  $('theme-toggle').setAttribute('aria-label', title);
 }
 
 // Один диалог используется для названий, удаления и несохранённых правок.
@@ -725,7 +715,6 @@ $('load-external').onclick = run(async () => {
   if (choice === 'load') await openNote(state.note.path, true);
 });
 $('save-copy').onclick = run(saveCopy);
-$('theme-toggle').onclick = run(async () => { setTheme(state.theme === 'dark' ? 'light' : 'dark'); await api.preferences({ theme: state.theme }); });
 $('search-open').onclick = openSearch;
 $('search-close').onclick = () => $('search-dialog').close();
 $('search-dialog').addEventListener('close', () => { ++searchGeneration; clearTimeout(searchTimer); (state.sidebar ? $('search-open') : $('sidebar-toggle')).focus(); });
@@ -767,7 +756,6 @@ window.addEventListener('focus', run(refreshFiles));
 
 async function init() {
   const initial = await api.initial();
-  setTheme(initial.settings.theme || 'dark');
   state.viewMode = ['list', 'tiles', 'icons'].includes(initial.settings.viewMode) ? initial.settings.viewMode : 'list';
   state.preview = initial.settings.preview !== false;
   state.sidebar = initial.settings.sidebar !== false;

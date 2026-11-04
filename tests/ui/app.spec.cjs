@@ -110,9 +110,12 @@ test('создать, переименовать, отменить и подтв
 });
 
 test('защита несохранённого текста и тема после перезапуска', async () => {
+  await fs.mkdir(data, { recursive: true });
+  await fs.writeFile(path.join(data, 'settings.json'), JSON.stringify({ theme: 'dark' }));
   await launch();
-  expect(await application.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors)).toBe(true);
-  await page.locator('#theme-toggle').click();
+  expect(await application.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors)).toBe(false);
+  await expect(page.locator('.brand, #theme-toggle')).toHaveCount(0);
+  expect((await page.locator('#search-open').boundingBox()).y).toBeLessThan(25);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect.poll(() => application.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors)).toBe(false);
   await page.locator('#edit').click();
@@ -149,7 +152,6 @@ test('скриншоты, маленькое окно, полный экран �
   await page.locator('.folder-shortcut', { hasText: 'SSH' }).click();
   await page.locator('.file-row.note', { hasText: 'Подключение' }).click();
   await page.screenshot({ path: 'test-results/notes-dark.png', animations: 'disabled' });
-  await page.locator('#theme-toggle').click();
   await page.screenshot({ path: 'test-results/notes-light.png', animations: 'disabled' });
   await page.keyboard.press('Control+k');
   await page.locator('#search-input').fill('ssh');
@@ -335,7 +337,6 @@ test('виды: крупные значки, плитки, список и по�
   const name = await folderRows.first().locator('.file-row-name').boundingBox();
   expect(art.y + art.height).toBeLessThan(name.y);
   await page.screenshot({ path: 'test-results/notes-icons-dark.png', animations: 'disabled' });
-  await page.locator('#theme-toggle').click();
   await page.screenshot({ path: 'test-results/notes-icons-light.png', animations: 'disabled' });
   await page.locator('#view-mode').selectOption('tiles');
   await expect(page.locator('#file-list')).toHaveClass(/view-tiles/);
@@ -769,7 +770,6 @@ test('визуальный редактор: списки, задачи, ссы�
   await page.keyboard.insertText('ssh user@server\nprintf "a  b"');
   await expect(richText().locator('pre code')).toHaveText('ssh user@server\nprintf "a  b"');
   await page.screenshot({ path: 'test-results/notes-editor-dark.png', animations: 'disabled' });
-  await page.locator('#theme-toggle').click();
   await expect(page.locator('#visual-editor .toastui-editor-defaultUI')).not.toHaveClass(/toastui-editor-dark/);
   await page.screenshot({ path: 'test-results/notes-editor-light.png', animations: 'disabled' });
   await page.keyboard.press('Control+s');
