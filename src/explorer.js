@@ -69,7 +69,7 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
     if (!state.root) { $('breadcrumbs').textContent = 'Выберите папку с заметками'; return; }
     const entries = orderEntries(children(state.folder));
     $('browser-title').textContent = state.folder ? basename(state.folder) : 'Мои заметки';
-    $('folder-count').textContent = entries.length;
+    $('browser-title').title = $('browser-title').textContent;
     $('folder-empty').hidden = entries.length > 0;
     const list = $('file-list');
     const signature = JSON.stringify([state.root, state.folder, entries.map(node => [node.path, node.name, node.type, node.children?.map(item => item.path)])]);
