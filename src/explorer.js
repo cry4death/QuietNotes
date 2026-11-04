@@ -1,5 +1,5 @@
 // Список папок, просмотр содержимого и выбор места для переноса.
-export function createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu }) {
+export function createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu, orderEntries }) {
   const allNodes = () => flatten(state.tree);
   const children = relative => relative ? allNodes().find(node => node.path === relative)?.children || [] : state.tree;
   const mime = 'application/x-quiet-notes-path';
@@ -45,7 +45,7 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
     $('preview-toggle').setAttribute('aria-pressed', String(state.preview));
     $('preview-toggle').title = state.preview ? 'Скрыть область просмотра' : 'Показать область просмотра';
     const library = $('tree'); library.replaceChildren();
-    for (const node of state.tree.filter(item => item.type === 'folder')) {
+    for (const node of orderEntries(state.tree.filter(item => item.type === 'folder'))) {
       const button = document.createElement('button'); button.className = 'folder-shortcut'; button.dataset.path = node.path;
       button.classList.toggle('active', state.folder === node.path || state.folder.startsWith(node.path + '/'));
       button.innerHTML = icon('folder') + `<span class="tree-name">${escape(node.name)}</span><span class="folder-count">${flatten(node.children).filter(item => item.type === 'note').length}</span>`;
@@ -67,7 +67,7 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
     $('folder-up').disabled = !state.folder;
     breadcrumbs($('breadcrumbs'), state.folder, navigateFolder, true);
     if (!state.root) { $('breadcrumbs').textContent = 'Выберите папку с заметками'; return; }
-    const entries = children(state.folder);
+    const entries = orderEntries(children(state.folder));
     $('browser-title').textContent = state.folder ? basename(state.folder) : 'Мои заметки';
     $('folder-count').textContent = entries.length;
     $('folder-empty').hidden = entries.length > 0;
@@ -93,7 +93,7 @@ export function createExplorer({ state, $, icon, escape, flatten, parent, basena
       const artwork = node.type === 'folder'
         ? `<span class="item-art folder-art ${flatten(node.children).some(item => item.type === 'note') ? 'has-paper' : ''}" aria-hidden="true"><span class="folder-back"></span><span class="folder-paper"></span><span class="folder-front"></span></span>`
         : '<span class="item-art document-art" aria-hidden="true"><span class="document-fold"></span><span class="document-lines"></span><span class="document-label">md</span></span>';
-      const badge = node.type === 'note' ? `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>` : '';
+      const badge = `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>`;
       row.innerHTML = icon(node.type === 'folder' ? 'folder' : 'file') + artwork
         + `<span class="file-row-info"><span class="file-row-label"><span class="file-row-name">${escape(node.name)}</span>${badge}</span><span class="file-row-detail">${detail}</span></span><span class="file-extension">${node.type === 'folder' ? 'Папка' : '.md'}</span>`;
       row.onclick = run(() => node.type === 'folder' ? selectFolder(node) : navigateToNote(node.path));

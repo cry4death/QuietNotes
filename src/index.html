@@ -13,13 +13,18 @@
     <aside id="sidebar" class="sidebar" aria-label="Папки и заметки">
       <header class="brand"><span class="brand-mark" data-icon="notebook"></span><span>Заметки</span></header>
       <button class="search-trigger" id="search-open"><span data-icon="search"></span><span>Найти заметку</span><kbd>Ctrl K</kbd></button>
-      <div class="create-actions"><button class="button primary" id="create-note"><span data-icon="file-plus"></span>Новая заметка</button><button class="button" id="create-from-clipboard" title="Новая заметка из буфера · Ctrl+Shift+N"><span data-icon="clipboard"></span>Заметка из буфера</button><div class="create-secondary"><button class="button" id="create-folder"><span data-icon="folder-plus"></span>Новая папка</button><button class="button" id="import-files" title="Скопировать .md-файлы в открытую папку"><span data-icon="import"></span>Добавить файл</button></div></div>
+      <div class="create-actions" role="group" aria-label="Создание и добавление">
+        <button class="icon-button" id="create-note" aria-label="Новая заметка" title="Новая заметка"><span data-icon="file-plus"></span></button>
+        <button class="icon-button" id="create-from-clipboard" aria-label="Заметка из буфера" title="Заметка из буфера · Ctrl+Shift+N"><span data-icon="clipboard"></span></button>
+        <button class="icon-button" id="create-folder" aria-label="Новая папка" title="Новая папка"><span data-icon="folder-plus"></span></button>
+        <button class="icon-button" id="import-files" aria-label="Добавить файл" title="Добавить .md-файл"><span data-icon="import"></span></button>
+      </div>
       <div class="tree-heading"><button id="select-root" class="tree-root" title="Открыть корневую папку">Мои заметки</button><span id="note-count" class="count">0</span></div>
       <button id="library-root" class="folder-shortcut root-shortcut"><span data-icon="folder"></span>Главная папка</button>
       <div class="library-scroll">
         <section id="favorites" aria-labelledby="favorites-title" hidden>
           <h2 id="favorites-title">Избранное</h2>
-          <nav id="favorite-list" aria-label="Закреплённые заметки"></nav>
+          <nav id="favorite-list" aria-label="Избранные папки и заметки"></nav>
         </section>
         <nav id="tree" class="tree" aria-label="Папки библиотеки"></nav>
         <div id="tree-empty" class="tree-empty" hidden>Темы появятся здесь,<br>когда вы создадите папки.</div>

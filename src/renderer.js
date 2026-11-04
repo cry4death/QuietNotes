@@ -163,7 +163,7 @@ function drawTree() {
 
 function updateFavoriteBadges() {
   const pinned = new Set(favorites);
-  for (const button of document.querySelectorAll('.file-row.note, #folder-preview-list button[data-path]')) {
+  for (const button of document.querySelectorAll('.file-row, #folder-preview-list button[data-path]')) {
     const isFavorite = pinned.has(button.dataset.path);
     button.toggleAttribute('data-favorite', isFavorite);
     if (isFavorite) button.setAttribute('aria-description', 'В избранном');
@@ -172,7 +172,7 @@ function updateFavoriteBadges() {
 }
 
 function renderFavorites() {
-  const notes = new Map(nodes().filter(node => node.type === 'note').map(node => [node.path, node]));
+  const notes = new Map(nodes().map(node => [node.path, node]));
   const list = $('favorite-list');
   list.replaceChildren();
   for (const relative of favorites) {
@@ -183,7 +183,7 @@ function renderFavorites() {
     button.classList.toggle('active', state.selected === relative);
     button.title = relative;
     button.innerHTML = icon('star') + `<span class="tree-name">${escape(node.name)}</span>`;
-    button.onclick = run(() => navigateToNote(relative));
+    button.onclick = run(() => node.type === 'folder' ? navigateFolder(relative) : navigateToNote(relative));
     button.oncontextmenu = run(event => contextMenu(event, relative));
     list.append(button);
   }
@@ -195,9 +195,13 @@ async function toggleFavorite(relative) {
   const next = pinned ? favorites.filter(item => item !== relative) : [...favorites, relative];
   await api.preferences({ favorites: next });
   favorites = next;
-  renderFavorites();
-  updateFavoriteBadges();
-  toast(pinned ? 'Заметка убрана из избранного' : 'Заметка закреплена');
+  drawTree();
+  toast(pinned ? 'Убрано из избранного' : 'Добавлено в избранное');
+}
+
+function orderEntries(entries) {
+  const pinned = new Set(favorites);
+  return [...entries.filter(entry => pinned.has(entry.path)), ...entries.filter(entry => !pinned.has(entry.path))];
 }
 
 async function updateFavoritePaths(from, to) {
@@ -281,7 +285,7 @@ function showFolderPreview(selection = null) {
 
 function renderFolderPreview() {
   const relative = state.selected ?? state.folder;
-  const entries = relative ? nodes().find(node => node.path === relative)?.children || [] : state.tree;
+  const entries = orderEntries(relative ? nodes().find(node => node.path === relative)?.children || [] : state.tree);
   $('folder-preview-title').textContent = relative ? basename(relative) : 'Мои заметки';
   $('folder-preview-open').hidden = !state.selected;
   $('folder-preview-empty').hidden = entries.length > 0;
@@ -297,11 +301,9 @@ function renderFolderPreview() {
     const name = document.createElement('span');
     name.textContent = basename(entry.path);
     button.append(name);
-    if (entry.type === 'note') {
-      button.dataset.path = entry.path;
-      button.insertAdjacentHTML('beforeend', `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>`);
-      button.oncontextmenu = run(event => contextMenu(event, entry.path));
-    }
+    button.dataset.path = entry.path;
+    button.insertAdjacentHTML('beforeend', `<span class="favorite-badge" aria-hidden="true" title="В избранном">${icon('star')}</span>`);
+    button.oncontextmenu = run(event => contextMenu(event, entry.path));
     button.onclick = run(() => entry.type === 'folder' ? navigateFolder(entry.path) : navigateToNote(entry.path));
     item.append(button);
     list.append(item);
@@ -695,7 +697,7 @@ async function contextMenu(event, relative, background = false) {
   await actions[command.action]?.();
 }
 
-const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu });
+const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu, orderEntries });
 const panels = createPanels({ state, $, api, run });
 const finder = createNoteFinder($);
 const noteEditor = createNoteEditor({ $, getPath: () => state.note?.path || '', getTheme: () => state.theme, toast,

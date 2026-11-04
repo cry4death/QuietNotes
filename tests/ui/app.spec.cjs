@@ -468,6 +468,28 @@ async function chooseContextAction(label) {
   }, label);
 }
 
+test('закреплённые папки и заметки идут первыми при открытии папки', async () => {
+  await fs.mkdir(path.join(root, 'Альфа'));
+  await fs.writeFile(path.join(root, 'SSH', 'Альфа.md'), '# Альфа');
+  await launch();
+  await page.locator('#library-root').click();
+  await chooseContextAction('Закрепить в избранном');
+  await page.locator('.file-row.folder[data-path="SSH"]').click({button:'right'});
+  await expect(page.locator('.file-row').first()).toHaveAttribute('data-path','SSH');
+  await expect(page.locator('.file-row').first().locator('.favorite-badge')).toBeVisible();
+  await page.locator('.file-row.folder[data-path="SSH"]').dblclick();
+  await page.locator('.file-row.note[data-path="SSH/Подключение.md"]').click({button:'right'});
+  await expect(page.locator('.file-row').first()).toHaveAttribute('data-path','SSH/Подключение.md');
+  await expect(page.locator('#folder-preview-list button').first()).toHaveAttribute('data-path','SSH/Подключение.md');
+  await page.locator('#folder-up').click();
+  await expect(page.locator('.file-row').first()).toHaveAttribute('data-path','SSH');
+  await application.close(); application = null;
+  await launch(false);
+  await expect(page.locator('.file-row').first()).toHaveAttribute('data-path','SSH');
+  expect((await page.locator('.create-actions').boundingBox()).height).toBeLessThanOrEqual(34);
+  await expect(page.getByRole('button',{name:'Новая заметка',exact:true})).toHaveAttribute('title','Новая заметка');
+});
+
 test('звёздочка в каждом виде списка, в предпросмотре и после переноса и перезапуска', async () => {
   await launch();
   await chooseContextAction('Закрепить в избранном');

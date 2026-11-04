@@ -141,7 +141,7 @@ function installHandlers() {
       const item = (label, action) => ({ label, click: () => finish({ action, path: request.path, directory }) });
       const items = [];
       if (!request.background) items.push(item(folder ? 'Открыть папку' : 'Открыть заметку', folder ? 'open-folder' : 'open-note'), { type: 'separator' });
-      if (!request.background && !folder) {
+      if (!request.background && request.path) {
         items.push(item(currentFavorites().includes(request.path) ? 'Убрать из избранного' : 'Закрепить в избранном', 'favorite'), { type: 'separator' });
       }
       items.push(item('Новая заметка', 'create-note'), item('Новая заметка из буфера…', 'create-from-clipboard'),
@@ -167,7 +167,7 @@ function installHandlers() {
     if (Array.isArray(patch?.expanded)) settings.expanded = patch.expanded.filter(item => typeof item === 'string');
     if (store && Array.isArray(patch?.favorites)) {
       settings.favoriteLibraries = { ...settings.favoriteLibraries,
-        [store.root]: [...new Set(patch.favorites.filter(item => typeof item === 'string' && /\.md$/i.test(item)))] };
+        [store.root]: [...new Set(patch.favorites.filter(item => typeof item === 'string' && item.length > 0))] };
     }
     return persist();
   });
