@@ -235,11 +235,15 @@ test('проводник: обзор папки, двойной клик, оди
   await expect(page.locator('.file-row')).toHaveCount(3);
   await expect(page.locator('#markdown h1')).toHaveText('Начните здесь');
   await page.locator('.file-row.folder[data-path="SSH"]').click();
-  await expect(page.locator('#welcome-title')).toHaveText('SSH');
+  await expect(page.locator('#folder-preview-title')).toHaveText('SSH');
+  const preview = page.locator('#folder-preview-list');
+  await expect(preview.getByRole('button')).toHaveText(['Подключение.md']);
   await expect(page.locator('#browser-title')).toHaveText('Мои заметки');
+  await fs.writeFile(path.join(root, 'SSH', 'Команда.md'), '# Новая команда');
+  await expect(preview.getByRole('button')).toHaveText(['Команда.md', 'Подключение.md']);
   await page.locator('.file-row.folder[data-path="SSH"]').dblclick();
   await expect(page.locator('#browser-title')).toHaveText('SSH');
-  await page.locator('.file-row.note').click();
+  await preview.getByRole('button', { name: 'Подключение.md', exact: true }).click();
   await expect(page.locator('#markdown h1')).toHaveText('Подключение к серверу');
   await expect(page.locator('#note')).toBeVisible();
   await page.locator('#folder-up').click();
@@ -561,7 +565,7 @@ test('контекстное меню папки использует именн
   await page.locator('#action-input').fill('Git новое имя');
   await page.getByRole('button', { name: 'Переименовать', exact: true }).last().click();
   expect(await fs.readFile(path.join(root, 'Git новое имя', 'Ветки.md'), 'utf8')).toContain('# Ветки Git');
-  await expect(page.locator('#welcome-title')).toHaveText('Git новое имя');
+  await expect(page.locator('#folder-preview-title')).toHaveText('Git новое имя');
 });
 
 test('отмена контекстного меню не меняет несохранённый текст', async () => {

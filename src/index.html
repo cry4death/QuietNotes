@@ -38,6 +38,14 @@
           <button id="welcome-choose" class="button primary large"><span data-icon="folder"></span>Выбрать папку с заметками</button>
           <span class="empty-hint" id="welcome-hint">Подойдёт любая папка с файлами .md</span>
         </section>
+        <section id="folder-preview" class="note-document folder-preview" aria-labelledby="folder-preview-title" hidden>
+          <header class="folder-preview-heading">
+            <h1 id="folder-preview-title"></h1>
+            <button id="folder-preview-open" class="button">Открыть папку</button>
+          </header>
+          <ul id="folder-preview-list" aria-label="Содержимое папки"></ul>
+          <p id="folder-preview-empty" hidden>В папке пока пусто.</p>
+        </section>
         <article id="note" class="note-document" hidden><div class="note-meta"><span id="note-topic"></span><span class="meta-dot">·</span><span id="note-date"></span></div><div id="markdown" class="markdown"></div><div class="note-end"><span></span>Конец заметки<span></span></div></article>
         <section id="editor-panel" class="editor-panel" aria-label="Редактор заметки" hidden>
           <header class="editor-heading"><div class="editor-modes" role="group" aria-label="Режим редактора"><button id="editor-visual" aria-pressed="true">Текст</button><button id="editor-source" aria-pressed="false">Markdown</button></div><div id="editor-history" class="editor-history"><button id="editor-undo" class="icon-button" aria-label="Отменить действие" title="Отменить · Ctrl+Z">↶</button><button id="editor-redo" class="icon-button" aria-label="Повторить действие" title="Повторить · Ctrl+Y">↷</button></div></header>

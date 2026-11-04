@@ -156,7 +156,11 @@ async function confirmUnsaved() {
   return choice === 'discard';
 }
 
-function drawTree() { explorer.render(); panels.render(); }
+function drawTree() {
+  explorer.render();
+  panels.render();
+  if (!$('folder-preview').hidden) renderFolderPreview();
+}
 
 function updateToolbar() {
   $('select-root').setAttribute('aria-current', String(Boolean(state.root) && !state.selected));
@@ -177,13 +181,18 @@ function updateRoot() {
   updateToolbar();
 }
 
-function showWelcome() {
-  state.selected = null; state.note = null; state.editing = false; state.external = false;
+function clearNote(selection = null) {
+  state.selected = selection; state.note = null; state.editing = false; state.external = false;
   setDirty(false);
-  $('note').hidden = true; $('editor-panel').hidden = true; $('welcome').hidden = false; $('conflict-banner').hidden = true;
+  $('note').hidden = true; $('editor-panel').hidden = true; $('conflict-banner').hidden = true;
   $('content-scroll').scrollTop = 0;
+}
+
+function showWelcome() {
+  clearNote();
+  $('welcome').hidden = false; $('folder-preview').hidden = true;
   $('welcome-title').textContent = state.root ? 'Выберите заметку' : 'Всё нужное — под рукой.';
-  $('welcome-description').innerHTML = state.root ? 'Один клик по файлу — и его содержимое здесь.<br>Папки открываются двойным кликом, как в проводнике.' : 'Заметки, команды и инструкции.<br>В обычной папке на вашем компьютере.';
+  $('welcome-description').innerHTML = state.root ? 'Нажмите на папку или заметку, чтобы увидеть её содержимое.<br>Двойной клик открывает папку в списке.' : 'Заметки, команды и инструкции.<br>В обычной папке на вашем компьютере.';
   $('welcome-choose').innerHTML = icon(state.root ? 'file-plus' : 'folder') + (state.root ? 'Создать заметку' : 'Выбрать папку с заметками');
   $('welcome-hint').textContent = state.root ? `Новые файлы создаются в папке «${state.folder ? basename(state.folder) : 'Мои заметки'}»` : 'Подойдёт любая папка с файлами .md';
   updateToolbar(); drawTree();
@@ -192,7 +201,7 @@ function showWelcome() {
 function showFolder(node) {
   state.folder = node?.path || '';
   state.browser = true;
-  showWelcome();
+  showFolderPreview();
 }
 
 async function navigateFolder(relative) {
@@ -208,21 +217,42 @@ async function navigateFolder(relative) {
 }
 
 async function selectFolder(node) {
-  if (state.navigating || state.saving) return;
+  if (state.navigating || state.saving || state.selected === node.path) return;
   state.navigating = true;
   try {
     if (!(await confirmUnsaved())) return;
-    showSelectedFolder(node);
+    showFolderPreview(node.path);
   } finally { state.navigating = false; }
 }
 
-function showSelectedFolder(node) {
-  showWelcome(); state.selected = node.path;
-  $('welcome-title').textContent = node.name;
-  $('welcome-description').textContent = `${node.children.filter(item => item.type === 'folder').length} папок · ${node.children.filter(item => item.type === 'note').length} заметок`;
-  $('welcome-choose').innerHTML = icon('folder-open') + 'Открыть папку';
-  $('welcome-hint').textContent = 'Можно открыть двойным кликом или перенести сюда заметку.';
+function showFolderPreview(selection = null) {
+  clearNote(selection);
+  $('welcome').hidden = true; $('folder-preview').hidden = false;
   updateToolbar(); drawTree();
+}
+
+function renderFolderPreview() {
+  const relative = state.selected ?? state.folder;
+  const entries = relative ? nodes().find(node => node.path === relative)?.children || [] : state.tree;
+  $('folder-preview-title').textContent = relative ? basename(relative) : 'Мои заметки';
+  $('folder-preview-open').hidden = !state.selected;
+  $('folder-preview-empty').hidden = entries.length > 0;
+  const list = $('folder-preview-list');
+  const signature = JSON.stringify([relative, entries.map(entry => [entry.path, entry.type])]);
+  if (list.dataset.signature === signature) return;
+  list.dataset.signature = signature;
+  list.replaceChildren();
+  for (const entry of entries) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.innerHTML = icon(entry.type === 'folder' ? 'folder' : 'file');
+    const name = document.createElement('span');
+    name.textContent = basename(entry.path);
+    button.append(name);
+    button.onclick = run(() => entry.type === 'folder' ? navigateFolder(entry.path) : navigateToNote(entry.path));
+    item.append(button);
+    list.append(item);
+  }
 }
 
 function renderMarkdown() {
@@ -299,7 +329,7 @@ async function openNote(relative, skipConfirm = false, revealPreview = true) {
   setDirty(false);
   let folder = parent(relative);
   while (folder) { state.expanded.add(folder); folder = parent(folder); }
-  $('welcome').hidden = true; $('editor-panel').hidden = true; $('note').hidden = false; $('conflict-banner').hidden = true;
+  $('welcome').hidden = true; $('folder-preview').hidden = true; $('editor-panel').hidden = true; $('note').hidden = false; $('conflict-banner').hidden = true;
   renderMarkdown(); updateToolbar(); drawTree();
   $('content-scroll').scrollTop = 0;
   await api.preferences({ lastNote: relative, folder: state.folder, preview: state.preview, expanded: [...state.expanded] });
@@ -434,7 +464,7 @@ async function renameItem(relative = state.selected) {
     state.expanded = new Set([...state.expanded].map(item => item === node.path || item.startsWith(node.path + '/') ? next + item.slice(node.path.length) : item));
     state.tree = await api.tree();
     if (node.type === 'note') await openNote(next, true);
-    else { state.folder = parent(next); showSelectedFolder(nodes().find(item => item.path === next)); }
+    else { state.folder = parent(next); showFolderPreview(next); }
     await api.preferences({ expanded: [...state.expanded] });
     toast('Название изменено');
   } finally { state.navigating = false; }
@@ -452,7 +482,7 @@ async function moveItem(relative = state.selected, destination) {
     const next = await api.move(relative, folder);
     state.tree = await api.tree(); state.folder = folder;
     if (node.type === 'note') await openNote(next, true);
-    else showSelectedFolder(nodes().find(item => item.path === next));
+    else showFolderPreview(next);
     await api.preferences({ folder: state.folder });
     toast('Перемещено в «' + (folder ? basename(folder) : 'Мои заметки') + '»');
   } finally { state.navigating = false; }
@@ -614,7 +644,8 @@ $('view-mode').onchange = run(async () => {
 $('choose-root').onclick = run(chooseRoot);
 $('select-root').onclick = run(() => navigateFolder(''));
 $('folder-up').onclick = run(() => navigateFolder(parent(state.folder)));
-$('welcome-choose').onclick = run(() => selectedNode()?.type === 'folder' ? navigateFolder(state.selected) : state.root ? createItem('note') : chooseRoot());
+$('welcome-choose').onclick = run(() => state.root ? createItem('note') : chooseRoot());
+$('folder-preview-open').onclick = run(() => navigateFolder(state.selected));
 $('create-folder').onclick = run(() => createItem('folder'));
 $('create-note').onclick = run(() => createItem('note'));
 $('create-from-clipboard').onclick = run(() => createFromClipboard());
