@@ -37,10 +37,7 @@ svg { flex-shrink: 0; vertical-align: middle; }
 ::-webkit-scrollbar-thumb { background: var(--border); border: 2px solid transparent; background-clip: padding-box; border-radius: 6px; }
 .app-shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); height: 100vh; }
 .sidebar { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; padding: 0 16px; }
-.brand { display: flex; align-items: center; gap: 11px; height: 84px; padding: 0 10px; font-size: 18px; font-weight: 600; letter-spacing: -.4px; flex-shrink: 0; }
-.brand-mark { color: var(--accent); display: flex; }
-.brand-mark svg { width: 25px; height: 25px; }
-.search-trigger { border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 9px; height: 42px; width: 100%; padding: 0 10px; color: var(--muted); text-align: left; font-size: 13px; flex-shrink: 0; }
+.search-trigger { margin-top: 16px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 9px; height: 42px; width: 100%; padding: 0 10px; color: var(--muted); text-align: left; font-size: 13px; flex-shrink: 0; }
 .search-trigger kbd { margin-left: auto; font-size: 10px; white-space: nowrap; }
 kbd { font: 11px 'Segoe UI', sans-serif; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; white-space: nowrap; }
 .tree-heading { display: flex; align-items: center; gap: 8px; padding: 30px 8px 10px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
@@ -249,7 +246,6 @@ mark { background: transparent; color: var(--accent); font-weight: 600; }
 
 /* Папка открывается в списке, выбранная заметка — справа. */
 .app-shell { grid-template-columns: 235px minmax(0, 1fr); }
-.brand { height: 76px; }
 .sidebar { padding: 0 14px; }
 .tree-heading { padding: 25px 8px 9px; }
 .folder-shortcut { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; border-radius: 6px; padding: 8px 11px; text-align: left; font-size: 13px; color: var(--muted); }

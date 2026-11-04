@@ -455,7 +455,7 @@ test('изменение ширины мышью и восстановление
 
 async function sidebarCommand(label) {
   await chooseContextAction(label);
-  await page.locator('.brand').click({button:'right'});
+  await page.locator('#sidebar').click({button:'right', position:{x:2,y:8}});
 }
 
 async function chooseContextAction(label) {
