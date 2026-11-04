@@ -4,6 +4,8 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 
 const MAX_NOTE_BYTES = 10 * 1024 * 1024;
+const IMAGE_FOLDER = '.quiet-notes-images';
+const PNG_HEADER = Buffer.from('89504e470d0a1a0a', 'hex');
 const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const hash = text => createHash('sha256').update(text).digest('hex');
 const toRelative = value => value.split(path.sep).join('/');
@@ -87,21 +89,50 @@ class NoteStore {
     return { path: relative, content, version: hash(content), modified: stat.mtimeMs };
   }
 
-  async save(relative, content, version) {
+  async save(relative, content, version, attachments = []) {
     validateNoteContent(content);
     const full = await this.resolve(relative);
     const original = await this.read(relative);
     if (original.version !== version) return { conflict: true, current: original };
+    if (!Array.isArray(attachments) || attachments.length > 8) throw new Error('Слишком много изображений в одной правке.');
+    const images = attachments.map(({ name, bytes }) => {
+      if (typeof name !== 'string' || !/^[a-f0-9-]{36}\.(png|jpg)$/.test(name) ||
+          !ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_NOTE_BYTES ||
+          !content.includes('/' + IMAGE_FOLDER + '/' + name)) throw new Error('Некорректное изображение.');
+      const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const valid = name.endsWith('.png') ? buffer.subarray(0, 8).equals(PNG_HEADER)
+        : buffer.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'));
+      if (!valid) throw new Error('Поддерживаются изображения PNG и JPEG.');
+      return { name, buffer };
+    });
+    if (images.reduce((total, image) => total + image.buffer.length, 0) > 32 * 1024 * 1024) {
+      throw new Error('Общий размер новых изображений превышает 32 МБ.');
+    }
     const temporary = path.join(path.dirname(full), '.quiet-notes-' + randomUUID() + '.tmp');
+    const createdImages = [];
+    let committed = false;
     try {
       const stat = await fs.stat(full);
       await fs.writeFile(temporary, content, { encoding: 'utf8', flag: 'wx', mode: stat.mode });
+      if (images.length) {
+        await fs.mkdir(await this.resolve(IMAGE_FOLDER, true), { recursive: true });
+        for (const image of images) {
+          const target = await this.resolve(path.join(IMAGE_FOLDER, image.name), true);
+          const file = await fs.open(target, 'wx');
+          createdImages.push(target);
+          try { await file.writeFile(image.buffer); } finally { await file.close(); }
+        }
+      }
       // Повторная проверка перед заменой защищает от обычных внешних правок.
       if ((await this.read(relative)).version !== version) return { conflict: true, current: await this.read(relative) };
       await fs.rename(temporary, full);
+      committed = true;
       this.invalidateSearch();
       return await this.read(relative);
-    } finally { await fs.unlink(temporary).catch(() => {}); }
+    } finally {
+      await fs.unlink(temporary).catch(() => {});
+      if (!committed) await Promise.allSettled(createdImages.map(file => fs.unlink(file)));
+    }
   }
 
   async create(parent, name, type, content) {

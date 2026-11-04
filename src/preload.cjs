@@ -11,7 +11,7 @@ const on = (name, callback) => {
 contextBridge.exposeInMainWorld('notes', {
   initial: () => invoke('initial'), chooseRoot: () => invoke('choose-root'),
   tree: () => invoke('tree'), read: relative => invoke('read', relative), search: query => invoke('search', query),
-  save: (relative, content, version) => invoke('save', relative, content, version),
+  save: (relative, content, version, attachments) => invoke('save', relative, content, version, attachments),
   create: (parent, name, type, content) => invoke('create', parent, name, type, content),
   rename: (relative, name) => invoke('rename', relative, name), delete: relative => invoke('delete', relative),
   move: (relative, destination) => invoke('move', relative, destination),

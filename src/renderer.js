@@ -4,10 +4,12 @@ import hljs from 'highlight.js/lib/common';
 import { createExplorer } from './explorer.js';
 import { createPanels } from './panels.js';
 import { createNoteEditor } from './editor.js';
+import { createNoteFinder } from './find-note.js';
 
 const $ = id => document.getElementById(id);
 const api = window.notes;
 const icons = {
+  star: '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9Z"/>',
   clipboard: '<path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3M8 12h8m-8 4h8"/><rect x="9" y="2" width="6" height="5" rx="1.5"/>',
   notebook: '<rect x="5" y="3" width="15" height="18" rx="2"/><path d="M9 3v18M3 7h4M3 12h4M3 17h4M13 8h3M13 12h3"/>',
   search: '<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/>',
@@ -34,6 +36,7 @@ const icons = {
 const icon = name => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.file}</svg>`;
 document.querySelectorAll('[data-icon]').forEach(element => { element.innerHTML = icon(element.dataset.icon); });
 const state = { root: null, folder: '', viewMode: 'list', preview: true, sidebar: true, browser: true, sidebarWidth: 235, browserWidth: null, tree: [], expanded: new Set(), selected: null, note: null, editing: false, dirty: false, external: false, saving: false, navigating: false, theme: 'dark' };
+let favorites = [];
 let toastTimer, searchTimer, searchGeneration = 0, searchResults = [], activeResult = 0, refreshing = false, refreshAgain = false, closePending = false;
 const basename = value => value.split('/').at(-1);
 const parent = value => value.includes('/') ? value.slice(0, value.lastIndexOf('/')) : '';
@@ -159,7 +162,44 @@ async function confirmUnsaved() {
 function drawTree() {
   explorer.render();
   panels.render();
+  renderFavorites();
   if (!$('folder-preview').hidden) renderFolderPreview();
+}
+
+function renderFavorites() {
+  const notes = new Map(nodes().filter(node => node.type === 'note').map(node => [node.path, node]));
+  const list = $('favorite-list');
+  list.replaceChildren();
+  for (const relative of favorites) {
+    const node = notes.get(relative);
+    if (!node) continue;
+    const button = document.createElement('button');
+    button.className = 'folder-shortcut';
+    button.classList.toggle('active', state.selected === relative);
+    button.title = relative;
+    button.innerHTML = icon('star') + `<span class="tree-name">${escape(node.name)}</span>`;
+    button.onclick = run(() => navigateToNote(relative));
+    button.oncontextmenu = run(event => contextMenu(event, relative));
+    list.append(button);
+  }
+  $('favorites').hidden = !list.childElementCount;
+}
+
+async function toggleFavorite(relative) {
+  const pinned = favorites.includes(relative);
+  const next = pinned ? favorites.filter(item => item !== relative) : [...favorites, relative];
+  await api.preferences({ favorites: next });
+  favorites = next;
+  renderFavorites();
+  toast(pinned ? 'Заметка убрана из избранного' : 'Заметка закреплена');
+}
+
+async function updateFavoritePaths(from, to) {
+  const isInside = item => item === from || item.startsWith(from + '/');
+  if (from === to || !favorites.some(isInside)) return;
+  favorites = to ? favorites.map(item => isInside(item) ? to + item.slice(from.length) : item)
+    : favorites.filter(item => !isInside(item));
+  await api.preferences({ favorites });
 }
 
 function updateToolbar() {
@@ -182,6 +222,8 @@ function updateRoot() {
 }
 
 function clearNote(selection = null) {
+  finder.close();
+  noteEditor.clearImages();
   state.selected = selection; state.note = null; state.editing = false; state.external = false;
   setDirty(false);
   $('note').hidden = true; $('editor-panel').hidden = true; $('conflict-banner').hidden = true;
@@ -314,6 +356,7 @@ function renderMarkdown() {
   });
   $('note-topic').textContent = parent(state.note.path).replaceAll('/', ' / ') || 'Мои заметки';
   $('note-date').textContent = 'Изменено ' + new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' }).format(state.note.modified);
+  finder.refresh();
 }
 
 async function openNote(relative, skipConfirm = false, revealPreview = true) {
@@ -324,6 +367,8 @@ async function openNote(relative, skipConfirm = false, revealPreview = true) {
   }
   if (!skipConfirm && !(await confirmUnsaved())) return;
   const note = await api.read(relative);
+  finder.close();
+  noteEditor.clearImages();
   if (revealPreview) state.preview = true;
   state.selected = relative; state.folder = parent(relative); state.note = note; state.editing = false; state.external = false;
   setDirty(false);
@@ -349,6 +394,7 @@ async function chooseRoot() {
     const result = await api.chooseRoot();
     if (!result) return;
     state.root = result.root; state.folder = ''; state.tree = result.tree;
+    favorites = result.favorites;
     state.expanded = new Set(state.tree.filter(node => node.type === 'folder').map(node => node.path));
     await api.preferences({ lastNote: '', folder: '', expanded: [...state.expanded] });
     updateRoot(); showWelcome();
@@ -404,6 +450,7 @@ async function createFromClipboard(destination) {
 
 function startEditing() {
   if (!state.note || state.saving) return;
+  finder.close();
   state.editing = true;
   state.preview = true;
   drawTree();
@@ -418,8 +465,10 @@ async function saveNote() {
   if (state.external) { toast('Файл изменён снаружи. Загрузите его с диска или сохраните свою версию отдельной копией.', true); return false; }
   state.saving = true; updateToolbar();
   try {
-    const result = await api.save(state.note.path, noteEditor.value(), state.note.version);
+    const content = noteEditor.value();
+    const result = await api.save(state.note.path, content, state.note.version, await noteEditor.attachments(content));
     if (result.conflict) { showConflict(); return false; }
+    noteEditor.clearImages();
     state.note = result; state.editing = false; state.external = false;
     setDirty(false); renderMarkdown();
     $('note').hidden = false; $('editor-panel').hidden = true; $('conflict-banner').hidden = true;
@@ -444,7 +493,8 @@ async function saveCopy() {
   try {
     const relative = await api.create(parent(state.note.path), name, 'note');
     const original = await api.read(relative);
-    const saved = await api.save(relative, noteEditor.value(), original.version);
+    const content = noteEditor.value();
+    const saved = await api.save(relative, content, original.version, await noteEditor.attachments(content));
     if (saved.conflict) throw new Error('Файл копии тоже изменился. Выберите другое название.');
     state.tree = await api.tree();
     await openNote(relative, true);
@@ -461,6 +511,7 @@ async function renameItem(relative = state.selected) {
     const name = await ask({ title: 'Переименовать', value: node.name, buttons: [{ label: 'Отмена', value: null }, { label: 'Переименовать', value: 'submit', kind: 'primary' }] });
     if (!name) return;
     const next = await api.rename(node.path, name);
+    await updateFavoritePaths(node.path, next);
     state.expanded = new Set([...state.expanded].map(item => item === node.path || item.startsWith(node.path + '/') ? next + item.slice(node.path.length) : item));
     state.tree = await api.tree();
     if (node.type === 'note') await openNote(next, true);
@@ -480,6 +531,7 @@ async function moveItem(relative = state.selected, destination) {
     if (folder === null) return;
     if (folder === parent(relative)) { toast('Файл уже находится в этой папке'); return; }
     const next = await api.move(relative, folder);
+    await updateFavoritePaths(relative, next);
     state.tree = await api.tree(); state.folder = folder;
     if (node.type === 'note') await openNote(next, true);
     else showFolderPreview(next);
@@ -513,6 +565,7 @@ async function deleteItem(relative = state.selected) {
     const choice = await ask({ title: `Удалить «${node.name}»?`, description: node.type === 'folder' ? 'Папка и всё её содержимое будут перемещены в корзину Windows.' : 'Заметка будет перемещена в корзину Windows.', buttons: [{ label: 'Отмена', value: null }, { label: 'В корзину', value: 'delete', kind: 'danger' }] });
     if (choice !== 'delete') return;
     await api.delete(node.path);
+    await updateFavoritePaths(node.path);
     state.tree = await api.tree();
     while (state.folder && !nodes().some(item => item.type === 'folder' && item.path === state.folder)) state.folder = parent(state.folder);
     showWelcome();
@@ -617,6 +670,7 @@ async function contextMenu(event, relative, background = false) {
   const command = await api.contextMenu({ path: relative, background });
   if (!command) return;
   const actions = {
+    favorite: () => toggleFavorite(command.path),
     'create-note': () => createItem('note', command.directory),
     'create-from-clipboard': () => createFromClipboard(command.directory),
     'create-folder': () => createItem('folder', command.directory),
@@ -633,6 +687,7 @@ async function contextMenu(event, relative, background = false) {
 
 const explorer = createExplorer({ state, $, icon, escape, flatten, parent, basename, run, navigateFolder, navigateToNote, selectFolder, moveItem, contextMenu });
 const panels = createPanels({ state, $, api, run });
+const finder = createNoteFinder($);
 const noteEditor = createNoteEditor({ $, getPath: () => state.note?.path || '', getTheme: () => state.theme, toast,
   onChange: content => { if (state.editing && !state.saving) setDirty(content !== state.note.content); }
 });
@@ -671,6 +726,13 @@ $('search-input').onkeydown = event => {
   if (event.key === 'Enter') { event.preventDefault(); $('search-results').querySelectorAll('.search-result')[activeResult]?.click(); }
 };
 document.addEventListener('keydown', run(async event => {
+  if (event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyF' && state.note && !state.editing && !document.querySelector('dialog[open]')) {
+    event.preventDefault();
+    state.preview = true;
+    drawTree();
+    finder.open();
+    return;
+  }
   if (event.ctrlKey && event.shiftKey && !event.altKey && event.code === 'KeyN' && !event.isComposing) {
     event.preventDefault();
     if (!event.repeat) await createFromClipboard();
@@ -704,6 +766,7 @@ async function init() {
   state.sidebarWidth = Number.isFinite(initial.settings.sidebarWidth) ? initial.settings.sidebarWidth : 235;
   state.browserWidth = Number.isFinite(initial.settings.browserWidth) ? initial.settings.browserWidth : null;
   state.root = initial.root;
+  favorites = initial.favorites;
   state.expanded = new Set(initial.settings.expanded || []);
   updateRoot();
   if (state.root) {

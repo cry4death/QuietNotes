@@ -13,12 +13,48 @@ export function createNoteEditor({ $, onChange, getPath, getTheme, toast }) {
   const source = $('editor'), host = $('visual-editor');
   let editor, mode = 'visual', loading = false, locked = false;
   let visualBase = '', original = '', visualText = '', fileOriginal = '';
+  const pendingImages = new Map();
+  const imagePath = name => '/.quiet-notes-images/' + name;
   const value = () => source.value === fileOriginal.replace(/\r\n?/g, '\n') ? fileOriginal : source.value;
+
+  function addImage(blob) {
+    if (locked) return null;
+    const extension = { 'image/png': 'png', 'image/jpeg': 'jpg' }[blob.type];
+    if (!extension || !blob.size || blob.size > 10 * 1024 * 1024) {
+      toast('Вставьте изображение PNG или JPEG размером до 10 МБ.', true);
+      return null;
+    }
+    const size = [...pendingImages.values()].reduce((total, image) => total + image.blob.size, blob.size);
+    if (pendingImages.size >= 8 || size > 32 * 1024 * 1024) {
+      toast('Сохраните заметку перед добавлением других изображений.', true);
+      return null;
+    }
+    const name = crypto.randomUUID() + '.' + extension;
+    pendingImages.set(imagePath(name), { name, blob, url: URL.createObjectURL(blob) });
+    return imagePath(name);
+  }
+
+  function clearImages() {
+    for (const image of pendingImages.values()) URL.revokeObjectURL(image.url);
+    pendingImages.clear();
+  }
+
+  async function attachments(content) {
+    const images = [...pendingImages].filter(([path]) => content.includes(path));
+    return Promise.all(images.map(async ([, image]) => ({
+      name: image.name, bytes: new Uint8Array(await image.blob.arrayBuffer())
+    })));
+  }
 
   function imageView(node) {
     const image = document.createElement('img');
     image.alt = node.attrs.altText || '';
     const url = node.attrs.imageUrl;
+    const pending = pendingImages.get(url);
+    if (pending) {
+      image.src = pending.url;
+      return { dom: image };
+    }
     if (!/^[a-z][a-z\d+.-]*:|^\/\//i.test(url)) {
       try {
         const base = 'notes://media/' + getPath().split('/').map(encodeURIComponent).join('/');
@@ -47,9 +83,9 @@ export function createNoteEditor({ $, onChange, getPath, getTheme, toast }) {
         FORBID_ATTR: ['style']
       }),
       plugins: [() => ({ wysiwygNodeViews: { image: imageView } })],
-      hooks: { addImageBlobHook: () => {
-        toast('Сохраните изображение в папку заметки и укажите относительный путь в Markdown.');
-        return false;
+      hooks: { addImageBlobHook: (blob, insert) => {
+        const path = addImage(blob);
+        if (path) insert(path, 'Скриншот');
       } },
       events: { change: () => {
         if (loading || locked || mode !== 'visual') return;
@@ -97,6 +133,17 @@ export function createNoteEditor({ $, onChange, getPath, getTheme, toast }) {
   $('editor-visual').onclick = () => switchMode('visual');
   $('editor-source').onclick = () => switchMode('source');
   source.oninput = () => onChange(value());
+  source.onpaste = event => {
+    if (locked || event.clipboardData.getData('text/plain')) return;
+    const item = [...event.clipboardData.items].find(item => item.kind === 'file' && item.type.startsWith('image/'));
+    const blob = item?.getAsFile();
+    if (!blob) return;
+    event.preventDefault();
+    const path = addImage(blob);
+    if (!path) return;
+    source.setRangeText('\n\n![Скриншот](' + path + ')\n\n', source.selectionStart, source.selectionEnd, 'end');
+    onChange(value());
+  };
   for (const command of ['undo', 'redo']) {
     const button = $('editor-' + command);
     button.onmousedown = event => event.preventDefault();
@@ -118,9 +165,10 @@ export function createNoteEditor({ $, onChange, getPath, getTheme, toast }) {
 
   return {
     load(markdown) {
+      clearImages();
       fileOriginal = markdown; source.value = markdown; mode = 'visual'; renderMode(); mount();
     },
-    value,
+    value, attachments, clearImages,
     focus, setReadOnly,
     setTheme(theme) { host.querySelector('.toastui-editor-defaultUI')?.classList.toggle('toastui-editor-dark', theme === 'dark'); }
   };

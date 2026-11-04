@@ -12,6 +12,10 @@ let operations = Promise.resolve();
 let settingsQueue = Promise.resolve();
 let closing = false;
 let fullscreenQueue = Promise.resolve();
+const currentFavorites = () => {
+  const entries = settings.favoriteLibraries?.[store?.root];
+  return Array.isArray(entries) ? entries.filter(item => typeof item === 'string') : [];
+};
 const serialized = task => {
   const result = operations.then(task);
   operations = result.catch(() => {});
@@ -79,12 +83,12 @@ async function setRoot(root) {
   settings.root = store.root;
   delete settings.rootError;
   await persist();
-  return { root: store.root, tree };
+  return { root: store.root, tree, favorites: currentFavorites() };
 }
 
 function installHandlers() {
   const getStore = () => { if (!store) throw new Error('Сначала выберите папку заметок.'); return store; };
-  handle('initial', () => ({ settings, root: store?.root || null, version: app.getVersion() }));
+  handle('initial', () => ({ settings, root: store?.root || null, favorites: currentFavorites(), version: app.getVersion() }));
   handle('choose-root', () => serialized(async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Выберите папку с Markdown-заметками', properties: ['openDirectory', 'createDirectory'],
@@ -96,7 +100,7 @@ function installHandlers() {
   handle('tree', () => serialized(() => getStore().tree()));
   handle('read', relative => serialized(() => getStore().read(relative)));
   handle('search', query => serialized(() => getStore().search(query)));
-  handle('save', (relative, content, version) => serialized(() => getStore().save(relative, content, version)));
+  handle('save', (relative, content, version, attachments) => serialized(() => getStore().save(relative, content, version, attachments)));
   handle('create', (parent, name, type, content) => serialized(() => getStore().create(parent, name, type, content)));
   handle('rename', (relative, name) => serialized(() => getStore().rename(relative, name)));
   handle('move', (relative, destination) => serialized(() => getStore().move(relative, destination)));
@@ -137,6 +141,9 @@ function installHandlers() {
       const item = (label, action) => ({ label, click: () => finish({ action, path: request.path, directory }) });
       const items = [];
       if (!request.background) items.push(item(folder ? 'Открыть папку' : 'Открыть заметку', folder ? 'open-folder' : 'open-note'), { type: 'separator' });
+      if (!request.background && !folder) {
+        items.push(item(currentFavorites().includes(request.path) ? 'Убрать из избранного' : 'Закрепить в избранном', 'favorite'), { type: 'separator' });
+      }
       items.push(item('Новая заметка', 'create-note'), item('Новая заметка из буфера…', 'create-from-clipboard'),
         item('Новая папка', 'create-folder'), item('Добавить файл…', 'import'));
       if (!request.background && request.path) items.push({ type: 'separator' }, item('Переименовать…', 'rename'), item('Переместить…', 'move'), item('Удалить…', 'delete'));
@@ -158,6 +165,10 @@ function installHandlers() {
     if (Number.isFinite(patch?.sidebarWidth) && patch.sidebarWidth >= 190 && patch.sidebarWidth <= 360) settings.sidebarWidth = patch.sidebarWidth;
     if (patch?.browserWidth === null || Number.isFinite(patch?.browserWidth) && patch.browserWidth >= 200 && patch.browserWidth <= 4000) settings.browserWidth = patch.browserWidth;
     if (Array.isArray(patch?.expanded)) settings.expanded = patch.expanded.filter(item => typeof item === 'string');
+    if (store && Array.isArray(patch?.favorites)) {
+      settings.favoriteLibraries = { ...settings.favoriteLibraries,
+        [store.root]: [...new Set(patch.favorites.filter(item => typeof item === 'string' && /\.md$/i.test(item)))] };
+    }
     return persist();
   });
   handle('dirty', value => { dirty = Boolean(value); window.setDocumentEdited(dirty); });

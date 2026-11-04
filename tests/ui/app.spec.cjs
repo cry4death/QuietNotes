@@ -32,7 +32,8 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => {
   if (application) {
-    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(window => window.removeAllListeners('close')));
+    // Этот процесс использует временный профиль. Тесты закрытия выполняют штатный выход отдельно.
+    await application.evaluate(({ app }) => { setTimeout(() => app.exit(0), 100); });
     await application.close();
   }
   application = null;
@@ -466,6 +467,73 @@ async function chooseContextAction(label) {
     } });
   }, label);
 }
+
+test('избранное переживает перезапуск, переименование и перенос заметки', async () => {
+  await launch();
+  await chooseContextAction('Закрепить в избранном');
+  await page.locator('.file-row.note').click({ button: 'right' });
+  await expect(page.locator('#favorite-list button')).toHaveText('Ветки');
+  await page.locator('#rename').click();
+  await page.locator('#action-input').fill('Команды Git');
+  await page.locator('#action-input').press('Enter');
+  await expect(page.locator('#favorite-list button')).toHaveText('Команды Git');
+  await page.locator('.file-row.note').dragTo(page.locator('.folder-shortcut[data-path="SSH"]'));
+  await expect(page.locator('#favorite-list button')).toHaveAttribute('title', 'SSH/Команды Git.md');
+  await application.close(); application = null;
+  await launch(false);
+  const favorite = page.locator('#favorite-list button');
+  await favorite.click();
+  await expect(page.locator('#markdown h1')).toHaveText('Ветки Git');
+  await chooseContextAction('Убрать из избранного');
+  await favorite.click({ button: 'right' });
+  await expect(page.locator('#favorites')).not.toBeVisible();
+});
+
+test('Ctrl+F находит фразу через границу форматирования и переключает совпадения', async () => {
+  await fs.writeFile(path.join(root, 'Git', 'Ветки.md'), '# Команды\n\nПроверить **SSH** ключ.\n\nПроверить SSH ключ.\n\n```sh\nssh -V\n```\n');
+  await launch();
+  await page.keyboard.press('Control+f');
+  const input = page.locator('#note-find-input');
+  await expect(input).toBeFocused();
+  await input.fill('проверить ssh');
+  await expect(page.locator('#note-find-count')).toHaveText('1 из 2');
+  expect(await page.evaluate(() => [...CSS.highlights.get('note-matches')].map(range => range.toString()))).toEqual(['Проверить SSH', 'Проверить SSH']);
+  await input.press('Enter');
+  await expect(page.locator('#note-find-count')).toHaveText('2 из 2');
+  await input.press('Shift+Enter');
+  await expect(page.locator('#note-find-count')).toHaveText('1 из 2');
+  await input.fill('Копировать');
+  await expect(page.locator('#note-find-count')).toHaveText('Нет совпадений');
+  await input.press('Escape');
+  await expect(page.locator('#note-find')).not.toBeVisible();
+  expect(await page.evaluate(() => CSS.highlights.has('note-current'))).toBe(false);
+});
+
+test('скриншот показывается до сохранения и остаётся доступен после переноса заметки', async () => {
+  await launch();
+  await page.locator('#edit').click();
+  await page.getByRole('textbox', { name: 'Текст заметки', exact: true }).evaluate(async el => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32; canvas.height = 16;
+    canvas.getContext('2d').fillRect(0, 0, 32, 16);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+    const data = new DataTransfer();
+    data.items.add(new File([blob], 'screenshot.png', { type: 'image/png' }));
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const draft = page.locator('#visual-editor .toastui-editor-ww-container img[alt="Скриншот"]');
+  await expect.poll(() => draft.evaluate(el => el.naturalWidth)).toBe(32);
+  await expect(fs.access(path.join(root, '.quiet-notes-images'))).rejects.toThrow();
+  await page.keyboard.press('Control+s');
+  const image = page.locator('#markdown img[alt="Скриншот"]');
+  await expect.poll(() => image.evaluate(el => el.naturalWidth)).toBe(32);
+  const files = await fs.readdir(path.join(root, '.quiet-notes-images'));
+  expect(files).toHaveLength(1);
+  await page.locator('.file-row.note').dragTo(page.locator('.folder-shortcut[data-path="SSH"]'));
+  await expect(page.locator('#browser-title')).toHaveText('SSH');
+  await expect.poll(() => image.evaluate(el => el.naturalWidth)).toBe(32);
+  expect(await fs.readFile(path.join(root, 'SSH', 'Ветки.md'), 'utf8')).toContain('/.quiet-notes-images/' + files[0]);
+});
 
 async function setClipboardText(text) {
   await application.evaluate(({ clipboard }, content) => {
